@@ -29,7 +29,7 @@ async function startGame(){
  if(!navigator.xr){setStatus('WebXR is not available. Open this in Meta Quest Browser.');button.disabled=false;return}
  try{
   setStatus('Starting VR and requesting floor tracking…');
-  session=await navigator.xr.requestSession('immersive-vr',{requiredFeatures:['local-floor'],optionalFeatures:['bounded-floor']});
+  session=await navigator.xr.requestSession('immersive-vr',{requiredFeatures:['local-floor'],optionalFeatures:['bounded-floor','hand-tracking']});
   const canvas=document.createElement('canvas');
   gl=canvas.getContext('webgl',{alpha:false,antialias:false,powerPreference:'low-power'});
   if(!gl)throw new Error('WebGL is unavailable.');
@@ -66,7 +66,7 @@ function setupRenderer(){
  positionBuffer=gl.createBuffer();colorBuffer=gl.createBuffer();
  dynamicPositionBuffer=gl.createBuffer();dynamicColorBuffer=gl.createBuffer();
  uVP=gl.getUniformLocation(program,'uVP');
- gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
+ gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.SCISSOR_TEST);
 }
 
 function addBox(data,x,y,z,sx,sy,sz,color){
@@ -97,12 +97,11 @@ function addControllerCube(data,m,color){
  const edges=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
  for(const [a,b] of edges){const p=transformPoint(m,...pts[a]),q=transformPoint(m,...pts[b]);data.p.push(...p,...q);data.c.push(...color,...color)}
 }
-function buildControllerGeometry(frame){
+function buildInputGeometry(frame){
  const data={p:[],c:[]};
- const sources=session.inputSources;
- for(let i=0;i<sources.length;i++){
-  const input=sources[i];
-  const color=i===0?[.2,.8,1]:[1,.35,.2];
+ for(let i=0;i<session.inputSources.length;i++){
+  const input=session.inputSources[i];
+  const color=input.hand?[1,.65,.15]:(input.handedness==='left'?[.2,.8,1]:[1,.35,.2]);
   if(input.gripSpace){
    const pose=frame.getPose(input.gripSpace,refSpace);
    if(pose)addControllerCube(data,pose.transform.matrix,color);
@@ -118,7 +117,7 @@ function buildControllerGeometry(frame){
  }
  return data;
 }
-function drawControllers(data){
+function drawInputGeometry(data){
  if(!data.p.length)return;
  gl.bindBuffer(gl.ARRAY_BUFFER,dynamicPositionBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.p),gl.DYNAMIC_DRAW);
  const ap=gl.getAttribLocation(program,'aPosition');gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);
@@ -129,18 +128,21 @@ function drawControllers(data){
 
 function onXRFrame(time,frame){
  const pose=frame.getViewerPose(refSpace);
- const controllerData=buildControllerGeometry(frame);
+ const inputData=buildInputGeometry(frame);
  if(pose){
   gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);
-  gl.clearColor(.055,.07,.09,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const ap=gl.getAttribLocation(program,'aPosition'),ac=gl.getAttribLocation(program,'aColor');
-  gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);
   for(const view of pose.views){
-   const v=layer.getViewport(view);gl.viewport(v.x,v.y,v.width,v.height);gl.clear(gl.DEPTH_BUFFER_BIT);
+   const v=layer.getViewport(view);
+   gl.viewport(v.x,v.y,v.width,v.height);
+   gl.scissor(v.x,v.y,v.width,v.height);
+   gl.clearColor(.055,.07,.09,1);
+   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
    gl.uniformMatrix4fv(uVP,false,multiply4(view.projectionMatrix,view.transform.inverse.matrix));
+   gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);
+   gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);
    gl.drawArrays(gl.TRIANGLES,0,vertexCount);
-   drawControllers(controllerData);
+   drawInputGeometry(inputData);
   }
  }
  frame.session.requestAnimationFrame(onXRFrame);
