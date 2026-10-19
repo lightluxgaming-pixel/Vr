@@ -17,7 +17,7 @@ const button=document.getElementById('startBtn');
 const status=document.getElementById('status');
 const errorBox=document.getElementById('error');
 let session=null,refSpace=null,gl=null,layer=null,program=null;
-let positionBuffer=null,colorBuffer=null,uVP=null;
+let positionBuffer=null,colorBuffer=null,dynamicPositionBuffer=null,dynamicColorBuffer=null,uVP=null;
 let vertexData=null,colorData=null,vertexCount=0;
 
 button.addEventListener('click',startGame);
@@ -29,7 +29,6 @@ async function startGame(){
  if(!navigator.xr){setStatus('WebXR is not available. Open this in Meta Quest Browser.');button.disabled=false;return}
  try{
   setStatus('Starting VR and requesting floor tracking…');
-  // local-floor is required so we never silently fall back to a headset-origin space.
   session=await navigator.xr.requestSession('immersive-vr',{requiredFeatures:['local-floor'],optionalFeatures:['bounded-floor']});
   const canvas=document.createElement('canvas');
   gl=canvas.getContext('webgl',{alpha:false,antialias:false,powerPreference:'low-power'});
@@ -64,7 +63,9 @@ function setupRenderer(){
  program=gl.createProgram();gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);
  if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program)||'Shader link failed.');
  gl.deleteShader(vs);gl.deleteShader(fs);gl.useProgram(program);
- positionBuffer=gl.createBuffer();colorBuffer=gl.createBuffer();uVP=gl.getUniformLocation(program,'uVP');
+ positionBuffer=gl.createBuffer();colorBuffer=gl.createBuffer();
+ dynamicPositionBuffer=gl.createBuffer();dynamicColorBuffer=gl.createBuffer();
+ uVP=gl.getUniformLocation(program,'uVP');
  gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
 }
 
@@ -86,17 +87,60 @@ function buildRoom(){
  gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);gl.bufferData(gl.ARRAY_BUFFER,vertexData,gl.STATIC_DRAW);
  gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);gl.bufferData(gl.ARRAY_BUFFER,colorData,gl.STATIC_DRAW);
 }
+
+function transformPoint(m,x,y,z){
+ return [m[0]*x+m[4]*y+m[8]*z+m[12],m[1]*x+m[5]*y+m[9]*z+m[13],m[2]*x+m[6]*y+m[10]*z+m[14]];
+}
+function addControllerCube(data,m,color){
+ const s=.055;
+ const pts=[[-s,-s,-s],[s,-s,-s],[s,s,-s],[-s,s,-s],[-s,-s,s],[s,-s,s],[s,s,s],[-s,s,s]];
+ const edges=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+ for(const [a,b] of edges){const p=transformPoint(m,...pts[a]),q=transformPoint(m,...pts[b]);data.p.push(...p,...q);data.c.push(...color,...color)}
+}
+function buildControllerGeometry(frame){
+ const data={p:[],c:[]};
+ const sources=session.inputSources;
+ for(let i=0;i<sources.length;i++){
+  const input=sources[i];
+  const color=i===0?[.2,.8,1]:[1,.35,.2];
+  if(input.gripSpace){
+   const pose=frame.getPose(input.gripSpace,refSpace);
+   if(pose)addControllerCube(data,pose.transform.matrix,color);
+  }
+  if(input.targetRaySpace){
+   const pose=frame.getPose(input.targetRaySpace,refSpace);
+   if(pose){
+    const m=pose.transform.matrix;
+    const p=transformPoint(m,0,0,0),q=transformPoint(m,0,0,-.45);
+    data.p.push(...p,...q);data.c.push(...color,...color);
+   }
+  }
+ }
+ return data;
+}
+function drawControllers(data){
+ if(!data.p.length)return;
+ gl.bindBuffer(gl.ARRAY_BUFFER,dynamicPositionBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.p),gl.DYNAMIC_DRAW);
+ const ap=gl.getAttribLocation(program,'aPosition');gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);
+ gl.bindBuffer(gl.ARRAY_BUFFER,dynamicColorBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.c),gl.DYNAMIC_DRAW);
+ const ac=gl.getAttribLocation(program,'aColor');gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);
+ gl.drawArrays(gl.LINES,0,data.p.length/3);
+}
+
 function onXRFrame(time,frame){
  const pose=frame.getViewerPose(refSpace);
+ const controllerData=buildControllerGeometry(frame);
  if(pose){
   gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);
   gl.clearColor(.055,.07,.09,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-  gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);const ap=gl.getAttribLocation(program,'aPosition');gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);const ac=gl.getAttribLocation(program,'aColor');gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);
+  const ap=gl.getAttribLocation(program,'aPosition'),ac=gl.getAttribLocation(program,'aColor');
+  gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);
   for(const view of pose.views){
    const v=layer.getViewport(view);gl.viewport(v.x,v.y,v.width,v.height);gl.clear(gl.DEPTH_BUFFER_BIT);
    gl.uniformMatrix4fv(uVP,false,multiply4(view.projectionMatrix,view.transform.inverse.matrix));
    gl.drawArrays(gl.TRIANGLES,0,vertexCount);
+   drawControllers(controllerData);
   }
  }
  frame.session.requestAnimationFrame(onXRFrame);
