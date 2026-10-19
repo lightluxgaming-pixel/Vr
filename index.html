@@ -5,206 +5,108 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>VR House Sandbox</title>
 <style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101318;color:#fff;font-family:system-ui,sans-serif}#menu{position:fixed;inset:0;display:grid;place-items:center;text-align:center;background:#101318;z-index:10}#panel{max-width:520px;padding:32px}h1{font-size:42px;margin:0 0 10px}p{opacity:.75;line-height:1.5}button{border:0;border-radius:16px;padding:18px 28px;background:#fff;color:#111;font-size:18px;font-weight:800;cursor:pointer}#status{margin-top:18px;min-height:24px}#error{margin-top:12px;color:#ff8c8c;white-space:pre-wrap;font-size:14px}canvas{display:block}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101318;color:#fff;font-family:system-ui,sans-serif}#menu{position:fixed;inset:0;display:grid;place-items:center;text-align:center;background:#101318;z-index:10}#panel{max-width:560px;padding:32px}h1{font-size:42px;margin:0 0 10px}p{opacity:.75;line-height:1.5}button{border:0;border-radius:16px;padding:18px 28px;background:#fff;color:#111;font-size:18px;font-weight:800;cursor:pointer}button:disabled{opacity:.5}#status{margin-top:18px;min-height:24px}#error{margin-top:12px;color:#ff8c8c;white-space:pre-wrap;font-size:14px}
 </style>
 </head>
 <body>
-<div id="menu"><div id="panel"><h1>VR House Sandbox</h1><p>Press the button to enter the game.</p><button id="startBtn">START GAME</button><div id="status">Ready.</div><div id="error"></div></div></div>
+<div id="menu"><div id="panel"><h1>VR House Sandbox</h1><p>Stand normally on the floor, then press START GAME. Quest's floor-tracking system will be used for the game floor.</p><button id="startBtn">START GAME</button><div id="status">Ready.</div><div id="error"></div></div></div>
 <script>
 'use strict';
-
 const menu=document.getElementById('menu');
 const button=document.getElementById('startBtn');
 const status=document.getElementById('status');
 const errorBox=document.getElementById('error');
-let session=null;
-let refSpace=null;
-let usingFloorSpace=false;
-let floorOffset=0;
-let roomBuilt=false;
-let gl=null;
-let layer=null;
-let program=null;
-let positionBuffer=null;
-let colorBuffer=null;
-let uVP=null;
-let uColor=null;
-let objects=[];
+let session=null,refSpace=null,gl=null,layer=null,program=null;
+let positionBuffer=null,colorBuffer=null,uVP=null;
+let vertexData=null,colorData=null,vertexCount=0;
 
 button.addEventListener('click',startGame);
-
-function setStatus(text){status.textContent=text;}
-function showError(text){errorBox.textContent=text||'';}
+function setStatus(t){status.textContent=t}
+function showError(t){errorBox.textContent=t||''}
 
 async function startGame(){
-  button.disabled=true;
-  showError('');
-
-  if(!navigator.xr){
-    setStatus('WebXR is not available. Open this page in Meta Quest Browser.');
-    button.disabled=false;
-    return;
-  }
-
-  try{
-    setStatus('Entering VR…');
-    // Ask Quest for real floor tracking. If it cannot provide it, we calibrate
-    // the floor from the user's first standing headset position instead.
-    session=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
-
-    const canvas=document.createElement('canvas');
-    canvas.width=1;
-    canvas.height=1;
-    gl=canvas.getContext('webgl',{alpha:false,antialias:false,powerPreference:'low-power'});
-    if(!gl) throw new Error('WebGL is unavailable.');
-
-    await gl.makeXRCompatible();
-    layer=new XRWebGLLayer(session,gl,{antialias:false});
-    session.updateRenderState({baseLayer:layer});
-
-    try{
-      refSpace=await session.requestReferenceSpace('local-floor');
-      usingFloorSpace=true;
-    }catch(_){
-      refSpace=await session.requestReferenceSpace('local');
-      usingFloorSpace=false;
-    }
-
-    setupRenderer();
-    roomBuilt=false;
-    floorOffset=0;
-
-    menu.style.display='none';
-    setStatus('GAME LAUNCHED — calibrating height…');
-    session.addEventListener('end',onSessionEnd);
-    session.requestAnimationFrame(onXRFrame);
-  }catch(e){
-    console.error(e);
-    setStatus('VR launch failed.');
-    showError((e&&e.name?e.name+': ':'')+(e&&e.message?e.message:'Unknown WebXR error'));
-    button.disabled=false;
-    if(session){try{await session.end();}catch(_){} session=null;}
-  }
+ button.disabled=true;showError('');
+ if(!navigator.xr){setStatus('WebXR is not available. Open this in Meta Quest Browser.');button.disabled=false;return}
+ try{
+  setStatus('Starting VR and requesting floor tracking…');
+  // local-floor is required so we never silently fall back to a headset-origin space.
+  session=await navigator.xr.requestSession('immersive-vr',{requiredFeatures:['local-floor'],optionalFeatures:['bounded-floor']});
+  const canvas=document.createElement('canvas');
+  gl=canvas.getContext('webgl',{alpha:false,antialias:false,powerPreference:'low-power'});
+  if(!gl)throw new Error('WebGL is unavailable.');
+  await gl.makeXRCompatible();
+  layer=new XRWebGLLayer(session,gl,{antialias:false});
+  session.updateRenderState({baseLayer:layer});
+  refSpace=await session.requestReferenceSpace('local-floor');
+  setStatus('Floor tracking ready. Starting room…');
+  setupRenderer();
+  buildRoom();
+  menu.style.display='none';
+  session.addEventListener('end',onSessionEnd);
+  session.requestAnimationFrame(onXRFrame);
+ }catch(e){
+  console.error(e);
+  setStatus('VR setup failed.');
+  showError((e&&e.name?e.name+': ':'')+(e&&e.message?e.message:'Unknown error')+'\n\nIf Quest has not completed its room/floor setup, finish that in the headset first.');
+  button.disabled=false;
+  if(session){try{await session.end()}catch(_){}session=null}
+ }
 }
 
 function compile(type,source){
-  const shader=gl.createShader(type);
-  gl.shaderSource(shader,source);
-  gl.compileShader(shader);
-  if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader)||'Shader compile failed.');
-  return shader;
+ const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);
+ if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s)||'Shader compile failed.');
+ return s;
 }
-
 function setupRenderer(){
-  const vs=compile(gl.VERTEX_SHADER,`attribute vec3 aPosition; attribute vec3 aColor; uniform mat4 uVP; varying vec3 vColor; void main(){gl_Position=uVP*vec4(aPosition,1.0);vColor=aColor;}`);
-  const fs=compile(gl.FRAGMENT_SHADER,`precision mediump float; varying vec3 vColor; uniform vec4 uColor; void main(){gl_FragColor=vec4(vColor,1.0)*uColor;}`);
-  program=gl.createProgram();
-  gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);
-  if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program)||'Shader link failed.');
-  gl.deleteShader(vs);gl.deleteShader(fs);
-
-  gl.useProgram(program);
-  positionBuffer=gl.createBuffer();
-  colorBuffer=gl.createBuffer();
-  uVP=gl.getUniformLocation(program,'uVP');
-  uColor=gl.getUniformLocation(program,'uColor');
-  gl.enable(gl.DEPTH_TEST);
-  gl.disable(gl.CULL_FACE);
+ const vs=compile(gl.VERTEX_SHADER,'attribute vec3 aPosition;attribute vec3 aColor;uniform mat4 uVP;varying vec3 vColor;void main(){gl_Position=uVP*vec4(aPosition,1.0);vColor=aColor;}');
+ const fs=compile(gl.FRAGMENT_SHADER,'precision mediump float;varying vec3 vColor;void main(){gl_FragColor=vec4(vColor,1.0);}');
+ program=gl.createProgram();gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);
+ if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program)||'Shader link failed.');
+ gl.deleteShader(vs);gl.deleteShader(fs);gl.useProgram(program);
+ positionBuffer=gl.createBuffer();colorBuffer=gl.createBuffer();uVP=gl.getUniformLocation(program,'uVP');
+ gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
 }
 
-function addBox(x,y,z,sx,sy,sz,color){
-  const hx=sx/2,hy=sy/2,hz=sz/2;
-  const p=[
-    -hx,-hy,-hz, hx,-hy,-hz, hx,hy,-hz,  -hx,-hy,-hz, hx,hy,-hz, -hx,hy,-hz,
-    -hx,-hy,hz, -hx,hy,hz, hx,hy,hz,  -hx,-hy,hz, hx,hy,hz, hx,-hy,hz,
-    -hx,-hy,-hz, -hx,hy,-hz, -hx,hy,hz,  -hx,-hy,-hz, -hx,hy,hz, -hx,-hy,hz,
-    hx,-hy,-hz, hx,-hy,hz, hx,hy,hz,  hx,-hy,-hz, hx,hy,hz, hx,hy,-hz,
-    -hx,hy,-hz, hx,hy,-hz, hx,hy,hz,  -hx,hy,-hz, hx,hy,hz, -hx,hy,hz,
-    -hx,-hy,-hz, -hx,-hy,hz, hx,-hy,hz,  -hx,-hy,-hz, hx,-hy,hz, hx,-hy,-hz
-  ];
-  for(let i=0;i<p.length;i+=3){p[i]+=x;p[i+1]+=y+floorOffset;p[i+2]+=z;}
-  const c=[];for(let i=0;i<36;i++)c.push(color[0],color[1],color[2]);
-  objects.push({p,c});
+function addBox(data,x,y,z,sx,sy,sz,color){
+ const hx=sx/2,hy=sy/2,hz=sz/2;
+ const p=[-hx,-hy,-hz,hx,-hy,-hz,hx,hy,-hz,-hx,-hy,-hz,hx,hy,-hz,-hx,hy,-hz,-hx,-hy,hz,-hx,hy,hz,hx,hy,hz,-hx,-hy,hz,hx,hy,hz,hx,-hy,hz,-hx,-hy,-hz,-hx,hy,-hz,-hx,hy,hz,-hx,-hy,-hz,-hx,hy,hz,-hx,-hy,hz,hx,-hy,-hz,hx,-hy,hz,hx,hy,hz,hx,-hy,-hz,hx,hy,hz,hx,hy,-hz,-hx,hy,-hz,hx,hy,-hz,hx,hy,hz,-hx,hy,-hz,hx,hy,hz,-hx,hy,hz,-hx,-hy,-hz,-hx,-hy,hz,hx,-hy,hz,-hx,-hy,-hz,hx,-hy,hz,hx,-hy,-hz];
+ for(let i=0;i<p.length;i+=3){data.p.push(p[i]+x,p[i+1]+y,p[i+2]+z);data.c.push(color[0],color[1],color[2])}
 }
-
 function buildRoom(){
-  objects=[];
-  // Small default room. All vertical positions are shifted by floorOffset
-  // when local-floor is unavailable, so the room still meets the real floor.
-  addBox(0,-0.05,0,6,0.1,6,[0.28,0.31,0.35]);
-  addBox(0,1.5,-3,6,3,0.1,[0.48,0.50,0.54]);
-  addBox(-3,1.5,0,0.1,3,6,[0.42,0.44,0.48]);
-  addBox(3,1.5,0,0.1,3,6,[0.42,0.44,0.48]);
-  addBox(0,3,0,6,0.1,6,[0.34,0.36,0.40]);
-  addBox(0,1.0,-1.0,2.0,0.12,1.2,[0.38,0.22,0.12]);
-  addBox(-0.85,0.5,-1.45,0.12,1.0,0.12,[0.25,0.14,0.08]);
-  addBox(0.85,0.5,-1.45,0.12,1.0,0.12,[0.25,0.14,0.08]);
-  addBox(-0.85,0.5,-0.55,0.12,1.0,0.12,[0.25,0.14,0.08]);
-  addBox(0.85,0.5,-0.55,0.12,1.0,0.12,[0.25,0.14,0.08]);
+ const data={p:[],c:[]};
+ addBox(data,0,-.05,0,6,.1,6,[.28,.31,.35]);
+ addBox(data,0,1.5,-3,6,3,.1,[.48,.50,.54]);
+ addBox(data,-3,1.5,0,.1,3,6,[.42,.44,.48]);
+ addBox(data,3,1.5,0,.1,3,6,[.42,.44,.48]);
+ addBox(data,0,3,0,6,.1,6,[.34,.36,.40]);
+ addBox(data,0,1,-1,2,.12,1.2,[.38,.22,.12]);
+ for(const x of[-.85,.85])for(const z of[-1.45,-.55])addBox(data,x,.5,z,.12,1,.12,[.25,.14,.08]);
+ vertexData=new Float32Array(data.p);colorData=new Float32Array(data.c);vertexCount=vertexData.length/3;
+ gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);gl.bufferData(gl.ARRAY_BUFFER,vertexData,gl.STATIC_DRAW);
+ gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);gl.bufferData(gl.ARRAY_BUFFER,colorData,gl.STATIC_DRAW);
 }
-
-function drawBox(obj,vp){
-  gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(obj.p),gl.STREAM_DRAW);
-  const aPosition=gl.getAttribLocation(program,'aPosition');
-  gl.enableVertexAttribArray(aPosition);gl.vertexAttribPointer(aPosition,3,gl.FLOAT,false,0,0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(obj.c),gl.STREAM_DRAW);
-  const aColor=gl.getAttribLocation(program,'aColor');
-  gl.enableVertexAttribArray(aColor);gl.vertexAttribPointer(aColor,3,gl.FLOAT,false,0,0);
-
-  gl.uniformMatrix4fv(uVP,false,vp);
-  gl.uniform4f(uColor,1,1,1,1);
-  gl.drawArrays(gl.TRIANGLES,0,36);
-}
-
 function onXRFrame(time,frame){
-  const s=frame.session;
-  const pose=frame.getViewerPose(refSpace);
-  if(pose){
-    // If Quest could not give us local-floor, use the first standing headset
-    // height as the floor reference. This is a one-time calibration.
-    if(!roomBuilt){
-      if(!usingFloorSpace){
-        const y=pose.views[0].transform.position.y;
-        if(Number.isFinite(y)&&Math.abs(y)>0.2&&Math.abs(y)<3.0) floorOffset=-y;
-      }
-      buildRoom();
-      roomBuilt=true;
-      setStatus(usingFloorSpace?'GAME LAUNCHED — floor calibrated':'GAME LAUNCHED — height calibrated');
-    }
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);
-    gl.enable(gl.DEPTH_TEST);
-    gl.clearColor(0.055,0.07,0.09,1);
-    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-    for(const view of pose.views){
-      const viewport=layer.getViewport(view);
-      gl.viewport(viewport.x,viewport.y,viewport.width,viewport.height);
-      gl.clear(gl.DEPTH_BUFFER_BIT);
-      const vp=multiply4(view.projectionMatrix,view.transform.inverse.matrix);
-      for(const obj of objects)drawBox(obj,vp);
-    }
+ const pose=frame.getViewerPose(refSpace);
+ if(pose){
+  gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);
+  gl.clearColor(.055,.07,.09,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);const ap=gl.getAttribLocation(program,'aPosition');gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);const ac=gl.getAttribLocation(program,'aColor');gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);
+  for(const view of pose.views){
+   const v=layer.getViewport(view);gl.viewport(v.x,v.y,v.width,v.height);gl.clear(gl.DEPTH_BUFFER_BIT);
+   gl.uniformMatrix4fv(uVP,false,multiply4(view.projectionMatrix,view.transform.inverse.matrix));
+   gl.drawArrays(gl.TRIANGLES,0,vertexCount);
   }
-  s.requestAnimationFrame(onXRFrame);
+ }
+ frame.session.requestAnimationFrame(onXRFrame);
 }
-
 function multiply4(a,b){
-  const out=new Float32Array(16);
-  for(let c=0;c<4;c++)for(let r=0;r<4;r++)out[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];
-  return out;
+ const o=new Float32Array(16);
+ for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];
+ return o;
 }
-
-function onSessionEnd(){
-  session=null;
-  refSpace=null;
-  roomBuilt=false;
-  menu.style.display='grid';
-  button.disabled=false;
-  setStatus('Game ended. Press START GAME to play again.');
-  showError('');
-}
+function onSessionEnd(){session=null;menu.style.display='grid';button.disabled=false;setStatus('Game ended. Press START GAME to play again.');showError('')}
 </script>
 </body>
 </html>
