@@ -7,7 +7,7 @@
 <style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101318;color:#fff;font-family:system-ui,sans-serif}#menu{position:fixed;inset:0;display:grid;place-items:center;text-align:center;background:#101318;z-index:10}#panel{max-width:560px;padding:32px}h1{font-size:42px;margin:0 0 10px}p{opacity:.75;line-height:1.5}button{border:0;border-radius:16px;padding:18px 28px;background:#fff;color:#111;font-size:18px;font-weight:800;cursor:pointer}button:disabled{opacity:.5}#status{margin-top:18px;min-height:24px}#error{margin-top:12px;color:#ff8c8c;white-space:pre-wrap;font-size:14px}</style>
 </head>
 <body>
-<div id="menu"><div id="panel"><h1>VR House Sandbox</h1><p>Complexity test: controllers become orientation-aware rings and Quest hand tracking draws the tracked hand joints and bones.</p><button id="startBtn">START GAME</button><div id="status">Ready.</div><div id="error"></div></div></div>
+<div id="menu"><div id="panel"><h1>VR House Sandbox</h1><p>Quest hand tracking renders a low-poly hand that follows every tracked joint. Controllers use orientation-aware rings.</p><button id="startBtn">START GAME</button><div id="status">Ready.</div><div id="error"></div></div></div>
 <script>
 'use strict';
 const menu=document.getElementById('menu'),button=document.getElementById('startBtn'),status=document.getElementById('status'),errorBox=document.getElementById('error');
@@ -39,24 +39,59 @@ function setupRenderer(){
 function addBox(data,x,y,z,sx,sy,sz,color){const hx=sx/2,hy=sy/2,hz=sz/2;const p=[-hx,-hy,-hz,hx,-hy,-hz,hx,hy,-hz,-hx,-hy,-hz,hx,hy,-hz,-hx,hy,-hz,-hx,-hy,hz,-hx,hy,hz,hx,hy,hz,-hx,-hy,hz,hx,hy,hz,hx,-hy,hz,-hx,-hy,-hz,-hx,hy,-hz,-hx,hy,hz,-hx,-hy,-hz,-hx,hy,hz,-hx,-hy,hz,hx,-hy,-hz,hx,-hy,hz,hx,hy,hz,hx,-hy,-hz,hx,hy,hz,hx,hy,-hz,-hx,hy,-hz,hx,hy,-hz,hx,hy,hz,-hx,hy,-hz,hx,hy,hz,-hx,hy,hz,-hx,-hy,-hz,-hx,-hy,hz,hx,-hy,hz,-hx,-hy,-hz,hx,-hy,hz,hx,-hy,-hz];for(let i=0;i<p.length;i+=3){data.p.push(p[i]+x,p[i+1]+y,p[i+2]+z);data.c.push(color[0],color[1],color[2])}}
 function buildRoom(){const data={p:[],c:[]};addBox(data,0,-.05,0,6,.1,6,[.28,.31,.35]);addBox(data,0,1.5,-3,6,3,.1,[.48,.50,.54]);addBox(data,-3,1.5,0,.1,3,6,[.42,.44,.48]);addBox(data,3,1.5,0,.1,3,6,[.42,.44,.48]);addBox(data,0,3,0,6,.1,6,[.34,.36,.40]);addBox(data,0,1,-1,2,.12,1.2,[.38,.22,.12]);for(const x of[-.85,.85])for(const z of[-1.45,-.55])addBox(data,x,.5,z,.12,1,.12,[.25,.14,.08]);vertexData=new Float32Array(data.p);colorData=new Float32Array(data.c);vertexCount=vertexData.length/3;gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);gl.bufferData(gl.ARRAY_BUFFER,vertexData,gl.STATIC_DRAW);gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);gl.bufferData(gl.ARRAY_BUFFER,colorData,gl.STATIC_DRAW)}
 function addLine(data,a,b,color){data.p.push(...a,...b);data.c.push(...color,...color)}
-function addCircle(data,center,r,color,matrix=null){const n=20;for(let i=0;i<n;i++){const a=i*Math.PI*2/n,b=(i+1)*Math.PI*2/n;let p1=[Math.cos(a)*r,Math.sin(a)*r,0],p2=[Math.cos(b)*r,Math.sin(b)*r,0];if(matrix){p1=transformPoint(matrix,...p1);p2=transformPoint(matrix,...p2)}else{p1=[p1[0]+center[0],p1[1]+center[1],p1[2]+center[2]];p2=[p2[0]+center[0],p2[1]+center[1],p2[2]+center[2]]}addLine(data,p1,p2,color)}}
 function transformPoint(m,x,y,z){return[m[0]*x+m[4]*y+m[8]*z+m[12],m[1]*x+m[5]*y+m[9]*z+m[13],m[2]*x+m[6]*y+m[10]*z+m[14]]}
-function addJoint(data,p,r,color){const n=8;for(let axis=0;axis<3;axis++)for(let i=0;i<n;i++){const a=i*Math.PI*2/n,b=(i+1)*Math.PI*2/n;let p1=[p[0],p[1],p[2]],p2=[p[0],p[1],p[2]];const u=axis===0?1:axis===1?0:0,v=axis===2?1:axis===0?2:2;const c1=Math.cos(a)*r,s1=Math.sin(a)*r,c2=Math.cos(b)*r,s2=Math.sin(b)*r;p1[u]+=c1;p1[v]+=s1;p2[u]+=c2;p2[v]+=s2;addLine(data,p1,p2,color)}}
+function addCircle(data,center,r,color,matrix=null){const n=20;for(let i=0;i<n;i++){const a=i*Math.PI*2/n,b=(i+1)*Math.PI*2/n;let p1=[Math.cos(a)*r,Math.sin(a)*r,0],p2=[Math.cos(b)*r,Math.sin(b)*r,0];if(matrix){p1=transformPoint(matrix,...p1);p2=transformPoint(matrix,...p2)}else{p1=[p1[0]+center[0],p1[1]+center[1],p1[2]+center[2]];p2=[p2[0]+center[0],p2[1]+center[1],p2[2]+center[2]]}addLine(data,p1,p2,color)}}
+function addTri(data,a,b,c,color){data.p.push(...a,...b,...c);data.c.push(...color,...color,...color)}
+function addSphere(data,p,r,color){
+ const rings=4,segs=7;
+ for(let y=0;y<rings;y++){
+  const t0=y/rings*Math.PI,t1=(y+1)/rings*Math.PI;
+  const sy0=Math.cos(t0),sy1=Math.cos(t1),rr0=Math.sin(t0)*r,rr1=Math.sin(t1)*r;
+  for(let x=0;x<segs;x++){
+   const a0=x/segs*Math.PI*2,a1=(x+1)/segs*Math.PI*2;
+   const a=[p[0]+Math.cos(a0)*rr0,p[1]+sy0*r,p[2]+Math.sin(a0)*rr0];
+   const b=[p[0]+Math.cos(a1)*rr0,p[1]+sy0*r,p[2]+Math.sin(a1)*rr0];
+   const c=[p[0]+Math.cos(a1)*rr1,p[1]+sy1*r,p[2]+Math.sin(a1)*rr1];
+   const d=[p[0]+Math.cos(a0)*rr1,p[1]+sy1*r,p[2]+Math.sin(a0)*rr1];
+   addTri(data,a,b,c,color);addTri(data,a,c,d,color);
+  }
+ }
+}
+function addCapsule(data,a,b,r,color){
+ const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],len=Math.hypot(dx,dy,dz);if(len<.0001){addSphere(data,a,r,color);return}
+ const nx=dx/len,ny=dy/len,nz=dz/len;
+ let ux=Math.abs(ny)<.9?0:1,uy=Math.abs(ny)<.9?1:0,uz=0;
+ let dot=ux*nx+uy*ny+uz*nz;ux-=dot*nx;uy-=dot*ny;uz-=dot*nz;const ul=Math.hypot(ux,uy,uz);ux/=ul;uy/=ul;uz/=ul;
+ const vx=ny*uz-nz*uy,vy=nz*ux-nx*uz,vz=nx*uy-ny*ux;
+ const segs=7,rings=3;
+ for(let j=0;j<rings;j++)for(let i=0;i<segs;i++){
+  const t0=j/(rings-1),t1=(j+1)/(rings-1),a0=i/segs*Math.PI*2,a1=(i+1)/segs*Math.PI*2;
+  const p0=[a[0]+dx*t0+ux*Math.cos(a0)*r+vx*Math.sin(a0)*r,a[1]+dy*t0+uy*Math.cos(a0)*r+vy*Math.sin(a0)*r,a[2]+dz*t0+uz*Math.cos(a0)*r+vz*Math.sin(a0)*r];
+  const p1=[a[0]+dx*t0+ux*Math.cos(a1)*r+vx*Math.sin(a1)*r,a[1]+dy*t0+uy*Math.cos(a1)*r+vy*Math.sin(a1)*r,a[2]+dz*t0+uz*Math.cos(a1)*r+vz*Math.sin(a1)*r];
+  const p2=[a[0]+dx*t1+ux*Math.cos(a1)*r+vx*Math.sin(a1)*r,a[1]+dy*t1+uy*Math.cos(a1)*r+vy*Math.sin(a1)*r,a[2]+dz*t1+uz*Math.cos(a1)*r+vz*Math.sin(a1)*r];
+  const p3=[a[0]+dx*t1+ux*Math.cos(a0)*r+vx*Math.sin(a0)*r,a[1]+dy*t1+uy*Math.cos(a0)*r+vy*Math.sin(a0)*r,a[2]+dz*t1+uz*Math.cos(a0)*r+vz*Math.sin(a0)*r];
+  addTri(data,p0,p1,p2,color);addTri(data,p0,p2,p3,color);
+ }
+ addSphere(data,a,r,color);addSphere(data,b,r,color);
+}
 function buildInputGeometry(frame){
  const data={p:[],c:[]};
  for(const input of session.inputSources){
   if(input.hand){
    const points=[];
-   for(let i=0;i<JOINTS.length;i++){const pose=frame.getJointPose(input.hand.get(JOINTS[i]),refSpace);points.push(pose?pose.transform.position:null)}
+   for(let i=0;i<JOINTS.length;i++){
+    const pose=frame.getJointPose(input.hand.get(JOINTS[i]),refSpace);
+    points.push(pose?{p:[pose.transform.position.x,pose.transform.position.y,pose.transform.position.z],r:pose.radius||.012}:null);
+   }
    const color=input.handedness==='left'?[.2,.8,1]:[1,.35,.2];
-   for(let i=0;i<points.length;i++)if(points[i])addJoint(data,[points[i].x,points[i].y,points[i].z],.012,color);
-   for(const [a,b] of HAND_BONES)if(points[a]&&points[b])addLine(data,[points[a].x,points[a].y,points[a].z],[points[b].x,points[b].y,points[b].z],color);
+   for(let i=0;i<points.length;i++)if(points[i])addSphere(data,points[i].p,Math.max(.009,points[i].r*.9),color);
+   for(const [a,b] of HAND_BONES)if(points[a]&&points[b])addCapsule(data,points[a].p,points[b].p,Math.min(points[a].r,points[b].r)*.82,color);
   }else if(input.gripSpace){
    const pose=frame.getPose(input.gripSpace,refSpace);if(pose){const color=input.handedness==='left'?[.2,.8,1]:[1,.35,.2];addCircle(data,[0,0,0],.075,color,pose.transform.matrix);addCircle(data,[0,0,0],.055,color,pose.transform.matrix)}}
  }
  return data;
 }
-function drawInputGeometry(data){if(!data.p.length)return;const ap=gl.getAttribLocation(program,'aPosition'),ac=gl.getAttribLocation(program,'aColor');gl.bindBuffer(gl.ARRAY_BUFFER,dynamicPositionBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.p),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,dynamicColorBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.c),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);gl.drawArrays(gl.LINES,0,data.p.length/3)}
+function drawInputGeometry(data){if(!data.p.length)return;const ap=gl.getAttribLocation(program,'aPosition'),ac=gl.getAttribLocation(program,'aColor');gl.bindBuffer(gl.ARRAY_BUFFER,dynamicPositionBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.p),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,dynamicColorBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.c),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,data.p.length/3)}
 function onXRFrame(time,frame){const pose=frame.getViewerPose(refSpace),inputData=buildInputGeometry(frame);if(pose){gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);const ap=gl.getAttribLocation(program,'aPosition'),ac=gl.getAttribLocation(program,'aColor');for(const view of pose.views){const v=layer.getViewport(view);gl.viewport(v.x,v.y,v.width,v.height);gl.scissor(v.x,v.y,v.width,v.height);gl.clearColor(.055,.07,.09,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(uVP,false,multiply4(view.projectionMatrix,view.transform.inverse.matrix));gl.bindBuffer(gl.ARRAY_BUFFER,positionBuffer);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,colorBuffer);gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,vertexCount);drawInputGeometry(inputData)}}frame.session.requestAnimationFrame(onXRFrame)}
 function multiply4(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o}
 function onSessionEnd(){session=null;menu.style.display='grid';button.disabled=false;setStatus('Game ended. Press START GAME to play again.');showError('')}
