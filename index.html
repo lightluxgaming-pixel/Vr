@@ -19,12 +19,14 @@ const status=document.getElementById('status');
 const errorBox=document.getElementById('error');
 let session=null;
 let refSpace=null;
+let usingFloorSpace=false;
+let floorOffset=0;
+let roomBuilt=false;
 let gl=null;
 let layer=null;
 let program=null;
 let positionBuffer=null;
 let colorBuffer=null;
-let vertexCount=0;
 let uVP=null;
 let uColor=null;
 let objects=[];
@@ -45,9 +47,10 @@ async function startGame(){
   }
 
   try{
-    // No libraries, capability checks, room scans, or heavy scene creation before this call.
     setStatus('Entering VR…');
-    session=await navigator.xr.requestSession('immersive-vr');
+    // Ask Quest for real floor tracking. If it cannot provide it, we calibrate
+    // the floor from the user's first standing headset position instead.
+    session=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
 
     const canvas=document.createElement('canvas');
     canvas.width=1;
@@ -59,14 +62,20 @@ async function startGame(){
     layer=new XRWebGLLayer(session,gl,{antialias:false});
     session.updateRenderState({baseLayer:layer});
 
-    try{refSpace=await session.requestReferenceSpace('local-floor');}
-    catch(_){refSpace=await session.requestReferenceSpace('local');}
+    try{
+      refSpace=await session.requestReferenceSpace('local-floor');
+      usingFloorSpace=true;
+    }catch(_){
+      refSpace=await session.requestReferenceSpace('local');
+      usingFloorSpace=false;
+    }
 
     setupRenderer();
-    buildRoom();
+    roomBuilt=false;
+    floorOffset=0;
 
     menu.style.display='none';
-    setStatus('GAME LAUNCHED');
+    setStatus('GAME LAUNCHED — calibrating height…');
     session.addEventListener('end',onSessionEnd);
     session.requestAnimationFrame(onXRFrame);
   }catch(e){
@@ -113,14 +122,15 @@ function addBox(x,y,z,sx,sy,sz,color){
     -hx,hy,-hz, hx,hy,-hz, hx,hy,hz,  -hx,hy,-hz, hx,hy,hz, -hx,hy,hz,
     -hx,-hy,-hz, -hx,-hy,hz, hx,-hy,hz,  -hx,-hy,-hz, hx,-hy,hz, hx,-hy,-hz
   ];
-  for(let i=0;i<p.length;i+=3){p[i]+=x;p[i+1]+=y;p[i+2]+=z;}
+  for(let i=0;i<p.length;i+=3){p[i]+=x;p[i+1]+=y+floorOffset;p[i+2]+=z;}
   const c=[];for(let i=0;i<36;i++)c.push(color[0],color[1],color[2]);
   objects.push({p,c});
 }
 
 function buildRoom(){
   objects=[];
-  // Small default room: floor, three walls, ceiling, and a simple table.
+  // Small default room. All vertical positions are shifted by floorOffset
+  // when local-floor is unavailable, so the room still meets the real floor.
   addBox(0,-0.05,0,6,0.1,6,[0.28,0.31,0.35]);
   addBox(0,1.5,-3,6,3,0.1,[0.48,0.50,0.54]);
   addBox(-3,1.5,0,0.1,3,6,[0.42,0.44,0.48]);
@@ -153,6 +163,18 @@ function onXRFrame(time,frame){
   const s=frame.session;
   const pose=frame.getViewerPose(refSpace);
   if(pose){
+    // If Quest could not give us local-floor, use the first standing headset
+    // height as the floor reference. This is a one-time calibration.
+    if(!roomBuilt){
+      if(!usingFloorSpace){
+        const y=pose.views[0].transform.position.y;
+        if(Number.isFinite(y)&&Math.abs(y)>0.2&&Math.abs(y)<3.0) floorOffset=-y;
+      }
+      buildRoom();
+      roomBuilt=true;
+      setStatus(usingFloorSpace?'GAME LAUNCHED — floor calibrated':'GAME LAUNCHED — height calibrated');
+    }
+
     gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0.055,0.07,0.09,1);
@@ -161,7 +183,8 @@ function onXRFrame(time,frame){
       const viewport=layer.getViewport(view);
       gl.viewport(viewport.x,viewport.y,viewport.width,viewport.height);
       gl.clear(gl.DEPTH_BUFFER_BIT);
-      for(const obj of objects)drawBox(obj,multiply4(view.projectionMatrix,view.transform.inverse.matrix));
+      const vp=multiply4(view.projectionMatrix,view.transform.inverse.matrix);
+      for(const obj of objects)drawBox(obj,vp);
     }
   }
   s.requestAnimationFrame(onXRFrame);
@@ -175,6 +198,8 @@ function multiply4(a,b){
 
 function onSessionEnd(){
   session=null;
+  refSpace=null;
+  roomBuilt=false;
   menu.style.display='grid';
   button.disabled=false;
   setStatus('Game ended. Press START GAME to play again.');
