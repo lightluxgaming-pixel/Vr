@@ -1,262 +1,69 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#050505">
-  <title>VR House Sandbox</title>
-  <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-    html,body { margin:0; min-height:100%; background:#050505; color:#fff; }
-    body { display:grid; place-items:center; }
-    #start { max-width:720px; padding:28px; text-align:center; }
-    button { border:0; border-radius:14px; padding:15px 22px; font:inherit; font-weight:700; cursor:pointer; background:#fff; color:#111; }
-    button:disabled { opacity:.45; cursor:not-allowed; }
-    .muted { opacity:.72; line-height:1.5; }
-    #status { min-height:1.5em; margin-top:14px; }
-    #hud { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:5; display:none; gap:8px; align-items:center; padding:9px; border-radius:16px; background:rgba(8,8,8,.76); backdrop-filter:blur(10px); }
-    #hud button { padding:10px 13px; border-radius:11px; font-size:14px; }
-    #hint { position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:5; display:none; padding:9px 13px; border-radius:12px; background:rgba(8,8,8,.7); font-size:13px; text-align:center; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>VR House Sandbox</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif}html,body{margin:0;min-height:100%;background:#050505;color:#fff}body{display:grid;place-items:center}button{border:0;border-radius:14px;padding:14px 20px;font:inherit;font-weight:800;cursor:pointer;background:#fff;color:#111}button:disabled{opacity:.45}.muted{opacity:.72;line-height:1.5}#start{max-width:720px;padding:28px;text-align:center}#status{min-height:1.5em;margin-top:14px}#hud{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:none;gap:7px;align-items:center;padding:9px;border-radius:16px;background:rgba(8,8,8,.78);backdrop-filter:blur(12px)}#hud button{padding:9px 12px;border-radius:11px;font-size:13px}#hud button.active{outline:2px solid #fff;transform:translateY(-1px)}#hint{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:5;display:none;padding:9px 13px;border-radius:12px;background:rgba(8,8,8,.72);font-size:13px;text-align:center;max-width:80vw}
+</style>
 </head>
 <body>
-  <main id="start">
-    <h1>VR House Sandbox</h1>
-    <p class="muted">Quest Browser prototype: use Space Setup to turn your real room into the play space. Controllers and hand tracking are supported when the browser exposes them.</p>
-    <button id="enter" type="button">Enter House Sandbox</button>
-    <div id="status" role="status" aria-live="polite">Checking WebXR…</div>
-  </main>
-  <div id="hud" aria-label="Spawn controls">
-    <button data-spawn="cube" type="button">Cube</button>
-    <button data-spawn="dummy" type="button">Dummy</button>
-    <button data-spawn="blaster" type="button">Blaster</button>
-    <button id="clear" type="button">Clear</button>
-  </div>
-  <div id="hint">Point and press trigger/select to spawn. Pinch can select when hand tracking is active.</div>
+<main id="start"><h1>VR House Sandbox</h1><p class="muted">Quest Browser sandbox. Enter VR, point at a surface and press trigger. Grab spawned objects with the trigger and move them around.</p><button id="enter">Enter House Sandbox</button><div id="status">Checking WebXR…</div></main>
+<div id="hud"><button data-spawn="cube" class="active">Cube</button><button data-spawn="dummy">Dummy</button><button data-spawn="blaster">Blaster</button><button id="clear">Clear</button></div>
+<div id="hint">Trigger = spawn / grab · Hold trigger on an object to move it · Release to drop · Blaster fires with trigger</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import {XRControllerModelFactory} from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/webxr/XRControllerModelFactory.js';
 
-  <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
-    import { XRControllerModelFactory } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/webxr/XRControllerModelFactory.js';
+const $=s=>document.querySelector(s), start=$('#start'), enter=$('#enter'), status=$('#status'), hud=$('#hud'), hint=$('#hint');
+let renderer,scene,camera,session,controller1,controller2; let spawnMode='cube';
+const spawned=[],dummies=[],shots=[],controllers=[]; const clock=new THREE.Clock();
+const ray=new THREE.Raycaster(); const tmpQ=new THREE.Quaternion(); const tmpV=new THREE.Vector3();
 
-    const start = document.querySelector('#start');
-    const enter = document.querySelector('#enter');
-    const status = document.querySelector('#status');
-    const hud = document.querySelector('#hud');
-    const hint = document.querySelector('#hint');
+function msg(t){status.textContent=t}
+async function supported(m){try{return !!navigator.xr&&await navigator.xr.isSessionSupported(m)}catch{return false}}
+async function init(){
+ if(!navigator.xr){msg('WebXR is unavailable. Open this in Meta Quest Browser.');enter.disabled=true;return}
+ const ar=await supported('immersive-ar'),vr=await supported('immersive-vr');
+ if(!ar&&!vr){msg('No immersive WebXR mode is available in this browser.');enter.disabled=true;return}
+ enter.dataset.mode=ar?'immersive-ar':'immersive-vr'; msg(ar?'Ready — AR/Space Setup mode detected.':'Ready — VR mode detected.');
+}
+function mat(c,metal=0,rough=.5){return new THREE.MeshStandardMaterial({color:c,metalness:metal,roughness:rough})}
+function makeScene(){
+ scene=new THREE.Scene(); scene.background=new THREE.Color(0x07090d);
+ camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.03,100);
+ scene.add(new THREE.HemisphereLight(0xffffff,0x334455,1.8)); const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(2,5,1);scene.add(sun);
+ renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(renderer.domElement);
+ const factory=new XRControllerModelFactory();
+ [0,1].forEach(i=>{const c=renderer.xr.getController(i);c.userData.index=i;c.userData.grabbing=null;c.userData.grabOffset=new THREE.Matrix4();c.addEventListener('selectstart',()=>onSelectStart(c));c.addEventListener('selectend',()=>onSelectEnd(c));c.addEventListener('connected',e=>{c.userData.source=e.data;});scene.add(c);const g=renderer.xr.getControllerGrip(i);g.add(factory.createControllerModel(g));scene.add(g);controllers.push(c)});
+ window.addEventListener('resize',resize); renderer.setAnimationLoop(tick);
+}
+function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
+function cube(){const o=new THREE.Mesh(new THREE.BoxGeometry(.25,.25,.25),mat(0x4d8dff,0,.35));o.userData={kind:'cube',vel:new THREE.Vector3(),mass:1};return o}
+function dummy(){const g=new THREE.Group(),m=mat(0xbfc4ca,0,.75);const body=new THREE.Mesh(new THREE.CapsuleGeometry(.18,.48,6,12),m);body.position.y=.62;g.add(body);const head=new THREE.Mesh(new THREE.SphereGeometry(.18,16,12),m);head.position.y=1.18;g.add(head);for(const x of[-.22,.22]){const l=new THREE.Mesh(new THREE.CapsuleGeometry(.065,.42,5,8),m);l.position.set(x,.62,0);g.add(l)}g.userData={kind:'dummy',vel:new THREE.Vector3(),mass:2,health:100};return g}
+function blaster(){const g=new THREE.Group(),m=mat(0x252a31,.8,.25);const b=new THREE.Mesh(new THREE.BoxGeometry(.18,.14,.52),m);g.add(b);const grip=new THREE.Mesh(new THREE.BoxGeometry(.12,.22,.16),m);grip.position.set(0,-.16,.08);grip.rotation.x=-.25;g.add(grip);const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.045,.055,.3,12),m);barrel.rotation.x=Math.PI/2;barrel.position.z=-.4;g.add(barrel);g.userData={kind:'blaster',vel:new THREE.Vector3(),mass:1};return g}
+function makeObject(k){return k==='dummy'?dummy():k==='blaster'?blaster():cube()}
+function spawnAt(pos,quat){const o=makeObject(spawnMode);o.position.copy(pos);o.quaternion.copy(quat||new THREE.Quaternion());scene.add(o);spawned.push(o);if(o.userData.kind==='dummy')dummies.push(o);return o}
+function controllerPose(c){const p=new THREE.Vector3(),q=new THREE.Quaternion();c.getWorldPosition(p);c.getWorldQuaternion(q);return[p,q]}
+function forward(c){const q=new THREE.Quaternion();c.getWorldQuaternion(q);return new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize()}
+function rayObject(c){const [p,q]=controllerPose(c);ray.ray.origin.copy(p);ray.ray.direction.set(0,0,-1).applyQuaternion(q).normalize();const hits=ray.intersectObjects(spawned,true);for(const h of hits){let o=h.object;while(o.parent&&!spawned.includes(o))o=o.parent;if(spawned.includes(o))return o}return null}
+function onSelectStart(c){
+ const hit=rayObject(c);
+ if(hit){c.userData.grabbing=hit;c.userData.grabDistance=Math.max(.35,c.position.distanceTo(hit.position));return}
+ const [p,q]=controllerPose(c);p.addScaledVector(forward(c),.8);const o=spawnAt(p,q);
+ if(o.userData.kind==='blaster'){c.userData.grabbing=o;c.userData.grabDistance=.8}
+}
+function onSelectEnd(c){c.userData.grabbing=null}
+function updateGrab(c,dt){const o=c.userData.grabbing;if(!o||!o.parent)return;const [p,q]=controllerPose(c);const target=p.addScaledVector(forward(c),c.userData.grabDistance||.7);o.position.lerp(target,Math.min(1,dt*22));o.quaternion.slerp(q,Math.min(1,dt*22));o.userData.vel.set(0,0,0)}
+function fire(blasterObj,c){const p=new THREE.Vector3(),q=new THREE.Quaternion();blasterObj.getWorldPosition(p);blasterObj.getWorldQuaternion(q);const dir=new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize();const s=new THREE.Mesh(new THREE.SphereGeometry(.035,8,8),new THREE.MeshBasicMaterial({color:0xffee88}));s.position.copy(p).addScaledVector(dir,.35);s.userData={vel:dir.multiplyScalar(9),life:2};scene.add(s);shots.push(s)}
+function updateShots(dt){for(let i=shots.length-1;i>=0;i--){const s=shots[i];s.position.addScaledVector(s.userData.vel,dt);s.userData.life-=dt;let remove=s.userData.life<=0;for(const d of dummies){if(!d.parent)continue;const h=d.position.distanceTo(s.position);if(h<.35){d.userData.health-=25;remove=true;if(d.userData.health<=0){scene.remove(d);const n=dummies.indexOf(d);if(n>=0)dummies.splice(n,1)}break}}if(remove){scene.remove(s);shots.splice(i,1)}}}
+function updateDummies(dt){const player=renderer.xr.getCamera(camera).position;for(const d of dummies){if(!d.parent)continue;const v=d.userData.vel;tmpV.subVectors(player,d.position);tmpV.y=0;if(tmpV.length()>.9){tmpV.normalize().multiplyScalar(.35);v.lerp(tmpV,.04);d.position.addScaledVector(v,dt);d.rotation.y=Math.atan2(v.x,v.z)}}}
+function tick(){const dt=Math.min(clock.getDelta(),.033);controllers.forEach(c=>updateGrab(c,dt));updateDummies(dt);updateShots(dt);renderer.render(scene,camera)}
+function clearAll(){while(spawned.length){const o=spawned.pop();scene.remove(o)}dummies.length=0;shots.forEach(s=>scene.remove(s));shots.length=0;controllers.forEach(c=>c.userData.grabbing=null)}
+async function enterXR(){enter.disabled=true;try{makeScene();const mode=enter.dataset.mode||'immersive-vr';const opts={optionalFeatures:['local-floor','bounded-floor','hand-tracking','dom-overlay']};if(mode==='immersive-ar')opts.requiredFeatures=['plane-detection'];opts.domOverlay={root:document.body};session=await navigator.xr.requestSession(mode,opts);await renderer.xr.setSession(session);session.addEventListener('end',()=>{hud.style.display='none';hint.style.display='none';start.style.display='block';enter.disabled=false});start.style.display='none';hud.style.display='flex';hint.style.display='block'}catch(e){console.error(e);msg('WebXR start failed: '+(e.message||e));enter.disabled=false}}
 
-    let renderer, scene, camera, session;
-    let controller1, controller2;
-    let spawnMode = 'cube';
-    const spawned = [];
-    const dummies = [];
-    const raycaster = new THREE.Raycaster();
-    const tempMatrix = new THREE.Matrix4();
-
-    function setStatus(text) { status.textContent = text; }
-
-    async function supported(mode) {
-      return !!navigator.xr?.isSessionSupported && navigator.xr.isSessionSupported(mode);
-    }
-
-    async function init() {
-      if (!navigator.xr) {
-        setStatus('This browser does not expose WebXR. Open this page in Meta Quest Browser.');
-        enter.disabled = true;
-        return;
-      }
-      const ar = await supported('immersive-ar');
-      const vr = await supported('immersive-vr');
-      if (!ar && !vr) {
-        setStatus('Immersive WebXR is not available here.');
-        enter.disabled = true;
-        return;
-      }
-      setStatus(ar ? 'Ready — Space Setup / passthrough mode available.' : 'Ready — VR mode available.');
-      enter.dataset.mode = ar ? 'immersive-ar' : 'immersive-vr';
-    }
-
-    function makeScene() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, .05, 100);
-
-      const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.6);
-      scene.add(hemi);
-      const dir = new THREE.DirectionalLight(0xffffff, 1.5);
-      dir.position.set(2, 4, 1);
-      scene.add(dir);
-
-      const reticle = new THREE.Mesh(
-        new THREE.RingGeometry(.045, .06, 24),
-        new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.8 })
-      );
-      reticle.rotation.x = -Math.PI / 2;
-      reticle.position.set(0,0,-1);
-      camera.add(reticle);
-      scene.add(camera);
-
-      renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, powerPreference:'high-performance' });
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-      renderer.setSize(innerWidth, innerHeight);
-      renderer.xr.enabled = true;
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.setAnimationLoop(tick);
-      document.body.appendChild(renderer.domElement);
-
-      const factory = new XRControllerModelFactory();
-      controller1 = renderer.xr.getController(0);
-      controller2 = renderer.xr.getController(1);
-      for (const c of [controller1, controller2]) {
-        c.addEventListener('select', () => spawnAtController(c));
-        const grip = renderer.xr.getControllerGrip(c === controller1 ? 0 : 1);
-        grip.add(factory.createControllerModel(grip));
-        scene.add(grip);
-        scene.add(c);
-      }
-
-      window.addEventListener('resize', () => {
-        camera.aspect = innerWidth / innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(innerWidth, innerHeight);
-      });
-    }
-
-    function materialFor(kind) {
-      if (kind === 'dummy') return new THREE.MeshStandardMaterial({ color:0xb7b7b7, roughness:.8 });
-      if (kind === 'blaster') return new THREE.MeshStandardMaterial({ color:0x20252b, metalness:.7, roughness:.3 });
-      return new THREE.MeshStandardMaterial({ color:0x5d8cff, roughness:.45 });
-    }
-
-    function makeDummy() {
-      const g = new THREE.Group();
-      const mat = materialFor('dummy');
-      const body = new THREE.Mesh(new THREE.CapsuleGeometry(.18,.55,6,12), mat);
-      body.position.y = .6;
-      g.add(body);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(.18,16,12), mat);
-      head.position.y = 1.15;
-      g.add(head);
-      for (const x of [-.22,.22]) {
-        const limb = new THREE.Mesh(new THREE.CapsuleGeometry(.07,.45,5,8), mat);
-        limb.position.set(x,.62,0);
-        limb.rotation.z = x > 0 ? -.12 : .12;
-        g.add(limb);
-      }
-      g.userData.kind='dummy';
-      g.userData.velocity = new THREE.Vector3();
-      g.userData.health = 100;
-      return g;
-    }
-
-    function makeObject(kind) {
-      if (kind === 'dummy') return makeDummy();
-      if (kind === 'blaster') {
-        const g = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(.18,.14,.55), materialFor('blaster'));
-        g.add(body);
-        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,.28,12), materialFor('blaster'));
-        barrel.rotation.x = Math.PI/2;
-        barrel.position.z = -.4;
-        g.add(barrel);
-        g.userData.kind='blaster';
-        return g;
-      }
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(.25,.25,.25), materialFor('cube'));
-      mesh.userData.kind='cube';
-      return mesh;
-    }
-
-    function spawn(position, quaternion = new THREE.Quaternion()) {
-      const obj = makeObject(spawnMode);
-      obj.position.copy(position);
-      obj.quaternion.copy(quaternion);
-      scene.add(obj);
-      spawned.push(obj);
-      if (obj.userData.kind === 'dummy') dummies.push(obj);
-    }
-
-    function spawnAtController(controller) {
-      const p = new THREE.Vector3();
-      const q = new THREE.Quaternion();
-      controller.getWorldPosition(p);
-      controller.getWorldQuaternion(q);
-      const forward = new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize();
-      p.addScaledVector(forward, .75);
-      spawn(p, q);
-    }
-
-    function clearSpawned() {
-      while (spawned.length) {
-        const obj = spawned.pop();
-        scene.remove(obj);
-        const i = dummies.indexOf(obj);
-        if (i >= 0) dummies.splice(i,1);
-      }
-    }
-
-    function tick(_, frame) {
-      const dt = Math.min(renderer.xr.getFrame ? .033 : .016, .033);
-      const player = renderer.xr.getCamera(camera).position;
-      for (const d of dummies) {
-        if (!d.parent) continue;
-        const toPlayer = new THREE.Vector3().subVectors(player, d.position);
-        toPlayer.y = 0;
-        if (toPlayer.length() > 1.2) {
-          toPlayer.normalize();
-          d.userData.velocity.lerp(toPlayer.multiplyScalar(.45), .06);
-          d.position.addScaledVector(d.userData.velocity, dt);
-          d.rotation.y = Math.atan2(d.userData.velocity.x, d.userData.velocity.z);
-        }
-      }
-
-      // Keep spawned objects near the floor rather than allowing them to fall forever.
-      for (const obj of spawned) {
-        if (obj.userData.kind !== 'dummy') {
-          obj.position.y = Math.max(.12, obj.position.y);
-        }
-      }
-      renderer.render(scene, camera);
-    }
-
-    async function enterXR() {
-      enter.disabled = true;
-      const mode = enter.dataset.mode || 'immersive-ar';
-      try {
-        makeScene();
-        const options = {
-          optionalFeatures: ['local-floor','bounded-floor','hand-tracking','dom-overlay'],
-          domOverlay: { root: document.body }
-        };
-        if (mode === 'immersive-ar') {
-          options.requiredFeatures = ['plane-detection'];
-          options.optionalFeatures.push('anchors');
-        }
-        session = await navigator.xr.requestSession(mode, options);
-        await renderer.xr.setSession(session);
-        session.addEventListener('end', () => {
-          hud.style.display='none'; hint.style.display='none'; start.style.display='grid'; enter.disabled=false;
-        });
-        start.style.display='none';
-        hud.style.display='flex'; hint.style.display='block';
-        setStatus('');
-        // Meta Quest Browser can expose Space Setup planes through plane-detection.
-        setTimeout(() => {
-          if (session && session.inputSources) {
-            // If no planes have appeared, the user can invoke Space Setup from the headset UI.
-          }
-        }, 2500);
-      } catch (err) {
-        console.error(err);
-        setStatus('Could not start WebXR: ' + (err?.message || err));
-        enter.disabled=false;
-      }
-    }
-
-    document.querySelectorAll('[data-spawn]').forEach(btn => btn.addEventListener('click', () => {
-      spawnMode = btn.dataset.spawn;
-    }));
-    document.querySelector('#clear').addEventListener('click', clearSpawned);
-    enter.addEventListener('click', enterXR);
-    init();
-  </script>
-</body>
-</html>
+document.querySelectorAll('[data-spawn]').forEach(b=>b.addEventListener('click',()=>{spawnMode=b.dataset.spawn;document.querySelectorAll('[data-spawn]').forEach(x=>x.classList.toggle('active',x===b))}));
+$('#clear').addEventListener('click',clearAll);enter.addEventListener('click',enterXR);init();
+</script>
+</body></html>
