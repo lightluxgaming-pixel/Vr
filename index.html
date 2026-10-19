@@ -5,65 +5,94 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>VR House Sandbox</title>
 <style>
-:root{color-scheme:dark;font-family:system-ui,sans-serif}html,body{margin:0;min-height:100%;background:#050505;color:#fff}body{display:grid;place-items:center}button{border:0;border-radius:14px;padding:14px 20px;font:inherit;font-weight:800;cursor:pointer;background:#fff;color:#111}button:disabled{opacity:.45}.muted{opacity:.72;line-height:1.5}#start{max-width:720px;padding:28px;text-align:center}#status{min-height:1.5em;margin-top:14px}#hud{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:none;gap:7px;align-items:center;padding:9px;border-radius:16px;background:rgba(8,8,8,.78);backdrop-filter:blur(12px)}#hud button{padding:9px 12px;border-radius:11px;font-size:13px}#hud button.active{outline:2px solid #fff;transform:translateY(-1px)}#hint{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:5;display:none;padding:9px 13px;border-radius:12px;background:rgba(8,8,8,.72);font-size:13px;text-align:center;max-width:80vw}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;color:#fff;font-family:system-ui,sans-serif}#menu{position:fixed;inset:0;display:grid;place-items:center;text-align:center;background:#101318;z-index:10}#panel{max-width:520px;padding:32px}h1{font-size:42px;margin:0 0 10px}p{opacity:.75;line-height:1.5}button{border:0;border-radius:16px;padding:18px 28px;background:#fff;color:#111;font-size:18px;font-weight:800;cursor:pointer}button:disabled{opacity:.45;cursor:default}#status{margin-top:18px;min-height:24px}#launched{position:fixed;top:22px;left:50%;transform:translateX(-50%);z-index:5;padding:12px 20px;border-radius:14px;background:rgba(0,0,0,.72);font-weight:900;letter-spacing:2px;display:none}canvas{display:block}
 </style>
 </head>
 <body>
-<main id="start"><h1>VR House Sandbox</h1><p class="muted">Quest Browser sandbox. Enter VR, point at a surface and press trigger. Grab spawned objects with the trigger and move them around.</p><button id="enter">Enter House Sandbox</button><div id="status">Checking WebXR…</div></main>
-<div id="hud"><button data-spawn="cube" class="active">Cube</button><button data-spawn="dummy">Dummy</button><button data-spawn="blaster">Blaster</button><button id="clear">Clear</button></div>
-<div id="hint">Trigger = spawn / grab · Hold trigger on an object to move it · Release to drop · Blaster fires with trigger</div>
+<div id="menu"><div id="panel"><h1>VR House Sandbox</h1><p>Press the button to enter the game.</p><button id="startBtn" disabled>START GAME</button><div id="status">Checking Quest WebXR…</div></div></div>
+<div id="launched">GAME LAUNCHED</div>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
-import {XRControllerModelFactory} from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/webxr/XRControllerModelFactory.js';
 
-const $=s=>document.querySelector(s), start=$('#start'), enter=$('#enter'), status=$('#status'), hud=$('#hud'), hint=$('#hint');
-let renderer,scene,camera,session,controller1,controller2; let spawnMode='cube';
-const spawned=[],dummies=[],shots=[],controllers=[]; const clock=new THREE.Clock();
-const ray=new THREE.Raycaster(); const tmpQ=new THREE.Quaternion(); const tmpV=new THREE.Vector3();
+const menu=document.getElementById('menu');
+const button=document.getElementById('startBtn');
+const status=document.getElementById('status');
+const launched=document.getElementById('launched');
+let renderer,scene,camera,session;
 
-function msg(t){status.textContent=t}
-async function supported(m){try{return !!navigator.xr&&await navigator.xr.isSessionSupported(m)}catch{return false}}
-async function init(){
- if(!navigator.xr){msg('WebXR is unavailable. Open this in Meta Quest Browser.');enter.disabled=true;return}
- const ar=await supported('immersive-ar'),vr=await supported('immersive-vr');
- if(!ar&&!vr){msg('No immersive WebXR mode is available in this browser.');enter.disabled=true;return}
- enter.dataset.mode=ar?'immersive-ar':'immersive-vr'; msg(ar?'Ready — AR/Space Setup mode detected.':'Ready — VR mode detected.');
+async function checkXR(){
+  if(!navigator.xr){status.textContent='WebXR is not available. Open this page in Meta Quest Browser.';return;}
+  try{
+    const ok=await navigator.xr.isSessionSupported('immersive-vr');
+    if(ok){button.disabled=false;status.textContent='Quest VR is ready.';}
+    else status.textContent='Immersive VR is not available on this browser/device.';
+  }catch(e){status.textContent='Could not check VR support.';console.error(e);}
 }
-function mat(c,metal=0,rough=.5){return new THREE.MeshStandardMaterial({color:c,metalness:metal,roughness:rough})}
-function makeScene(){
- scene=new THREE.Scene(); scene.background=new THREE.Color(0x07090d);
- camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.03,100);
- scene.add(new THREE.HemisphereLight(0xffffff,0x334455,1.8)); const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(2,5,1);scene.add(sun);
- renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(renderer.domElement);
- const factory=new XRControllerModelFactory();
- [0,1].forEach(i=>{const c=renderer.xr.getController(i);c.userData.index=i;c.userData.grabbing=null;c.userData.grabOffset=new THREE.Matrix4();c.addEventListener('selectstart',()=>onSelectStart(c));c.addEventListener('selectend',()=>onSelectEnd(c));c.addEventListener('connected',e=>{c.userData.source=e.data;});scene.add(c);const g=renderer.xr.getControllerGrip(i);g.add(factory.createControllerModel(g));scene.add(g);controllers.push(c)});
- window.addEventListener('resize',resize); renderer.setAnimationLoop(tick);
-}
-function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
-function cube(){const o=new THREE.Mesh(new THREE.BoxGeometry(.25,.25,.25),mat(0x4d8dff,0,.35));o.userData={kind:'cube',vel:new THREE.Vector3(),mass:1};return o}
-function dummy(){const g=new THREE.Group(),m=mat(0xbfc4ca,0,.75);const body=new THREE.Mesh(new THREE.CapsuleGeometry(.18,.48,6,12),m);body.position.y=.62;g.add(body);const head=new THREE.Mesh(new THREE.SphereGeometry(.18,16,12),m);head.position.y=1.18;g.add(head);for(const x of[-.22,.22]){const l=new THREE.Mesh(new THREE.CapsuleGeometry(.065,.42,5,8),m);l.position.set(x,.62,0);g.add(l)}g.userData={kind:'dummy',vel:new THREE.Vector3(),mass:2,health:100};return g}
-function blaster(){const g=new THREE.Group(),m=mat(0x252a31,.8,.25);const b=new THREE.Mesh(new THREE.BoxGeometry(.18,.14,.52),m);g.add(b);const grip=new THREE.Mesh(new THREE.BoxGeometry(.12,.22,.16),m);grip.position.set(0,-.16,.08);grip.rotation.x=-.25;g.add(grip);const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.045,.055,.3,12),m);barrel.rotation.x=Math.PI/2;barrel.position.z=-.4;g.add(barrel);g.userData={kind:'blaster',vel:new THREE.Vector3(),mass:1};return g}
-function makeObject(k){return k==='dummy'?dummy():k==='blaster'?blaster():cube()}
-function spawnAt(pos,quat){const o=makeObject(spawnMode);o.position.copy(pos);o.quaternion.copy(quat||new THREE.Quaternion());scene.add(o);spawned.push(o);if(o.userData.kind==='dummy')dummies.push(o);return o}
-function controllerPose(c){const p=new THREE.Vector3(),q=new THREE.Quaternion();c.getWorldPosition(p);c.getWorldQuaternion(q);return[p,q]}
-function forward(c){const q=new THREE.Quaternion();c.getWorldQuaternion(q);return new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize()}
-function rayObject(c){const [p,q]=controllerPose(c);ray.ray.origin.copy(p);ray.ray.direction.set(0,0,-1).applyQuaternion(q).normalize();const hits=ray.intersectObjects(spawned,true);for(const h of hits){let o=h.object;while(o.parent&&!spawned.includes(o))o=o.parent;if(spawned.includes(o))return o}return null}
-function onSelectStart(c){
- const hit=rayObject(c);
- if(hit){c.userData.grabbing=hit;c.userData.grabDistance=Math.max(.35,c.position.distanceTo(hit.position));return}
- const [p,q]=controllerPose(c);p.addScaledVector(forward(c),.8);const o=spawnAt(p,q);
- if(o.userData.kind==='blaster'){c.userData.grabbing=o;c.userData.grabDistance=.8}
-}
-function onSelectEnd(c){c.userData.grabbing=null}
-function updateGrab(c,dt){const o=c.userData.grabbing;if(!o||!o.parent)return;const [p,q]=controllerPose(c);const target=p.addScaledVector(forward(c),c.userData.grabDistance||.7);o.position.lerp(target,Math.min(1,dt*22));o.quaternion.slerp(q,Math.min(1,dt*22));o.userData.vel.set(0,0,0)}
-function fire(blasterObj,c){const p=new THREE.Vector3(),q=new THREE.Quaternion();blasterObj.getWorldPosition(p);blasterObj.getWorldQuaternion(q);const dir=new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize();const s=new THREE.Mesh(new THREE.SphereGeometry(.035,8,8),new THREE.MeshBasicMaterial({color:0xffee88}));s.position.copy(p).addScaledVector(dir,.35);s.userData={vel:dir.multiplyScalar(9),life:2};scene.add(s);shots.push(s)}
-function updateShots(dt){for(let i=shots.length-1;i>=0;i--){const s=shots[i];s.position.addScaledVector(s.userData.vel,dt);s.userData.life-=dt;let remove=s.userData.life<=0;for(const d of dummies){if(!d.parent)continue;const h=d.position.distanceTo(s.position);if(h<.35){d.userData.health-=25;remove=true;if(d.userData.health<=0){scene.remove(d);const n=dummies.indexOf(d);if(n>=0)dummies.splice(n,1)}break}}if(remove){scene.remove(s);shots.splice(i,1)}}}
-function updateDummies(dt){const player=renderer.xr.getCamera(camera).position;for(const d of dummies){if(!d.parent)continue;const v=d.userData.vel;tmpV.subVectors(player,d.position);tmpV.y=0;if(tmpV.length()>.9){tmpV.normalize().multiplyScalar(.35);v.lerp(tmpV,.04);d.position.addScaledVector(v,dt);d.rotation.y=Math.atan2(v.x,v.z)}}}
-function tick(){const dt=Math.min(clock.getDelta(),.033);controllers.forEach(c=>updateGrab(c,dt));updateDummies(dt);updateShots(dt);renderer.render(scene,camera)}
-function clearAll(){while(spawned.length){const o=spawned.pop();scene.remove(o)}dummies.length=0;shots.forEach(s=>scene.remove(s));shots.length=0;controllers.forEach(c=>c.userData.grabbing=null)}
-async function enterXR(){enter.disabled=true;try{makeScene();const mode=enter.dataset.mode||'immersive-vr';const opts={optionalFeatures:['local-floor','bounded-floor','hand-tracking','dom-overlay']};if(mode==='immersive-ar')opts.requiredFeatures=['plane-detection'];opts.domOverlay={root:document.body};session=await navigator.xr.requestSession(mode,opts);await renderer.xr.setSession(session);session.addEventListener('end',()=>{hud.style.display='none';hint.style.display='none';start.style.display='block';enter.disabled=false});start.style.display='none';hud.style.display='flex';hint.style.display='block'}catch(e){console.error(e);msg('WebXR start failed: '+(e.message||e));enter.disabled=false}}
 
-document.querySelectorAll('[data-spawn]').forEach(b=>b.addEventListener('click',()=>{spawnMode=b.dataset.spawn;document.querySelectorAll('[data-spawn]').forEach(x=>x.classList.toggle('active',x===b))}));
-$('#clear').addEventListener('click',clearAll);enter.addEventListener('click',enterXR);init();
+function buildRoom(){
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x20252c);
+  camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.01,100);
+
+  scene.add(new THREE.HemisphereLight(0xffffff,0x30343b,1.8));
+  const light=new THREE.PointLight(0xffffff,18,12);light.position.set(0,2.8,0);scene.add(light);
+
+  const floor=new THREE.Mesh(new THREE.BoxGeometry(8,.12,8),new THREE.MeshStandardMaterial({color:0x555b63,roughness:.8}));
+  floor.position.y=-.06;scene.add(floor);
+
+  const wallMat=new THREE.MeshStandardMaterial({color:0x8b9098,roughness:.9});
+  const back=new THREE.Mesh(new THREE.BoxGeometry(8,3,0.12),wallMat);back.position.set(0,1.5,-4);scene.add(back);
+  const left=new THREE.Mesh(new THREE.BoxGeometry(.12,3,8),wallMat);left.position.set(-4,1.5,0);scene.add(left);
+  const right=new THREE.Mesh(new THREE.BoxGeometry(.12,3,8),wallMat);right.position.set(4,1.5,0);scene.add(right);
+  const ceiling=new THREE.Mesh(new THREE.BoxGeometry(8,.12,8),new THREE.MeshStandardMaterial({color:0x6e737a,roughness:1}));ceiling.position.y=3;scene.add(ceiling);
+
+  const tableTop=new THREE.Mesh(new THREE.BoxGeometry(2,.12,1.2),new THREE.MeshStandardMaterial({color:0x6b4b32,roughness:.8}));
+  tableTop.position.set(0,1,-1.3);scene.add(tableTop);
+  for(const x of[-.8,.8])for(const z of[-1.7,-.9]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.12,1,.12),new THREE.MeshStandardMaterial({color:0x453021}));leg.position.set(x,.5,z);scene.add(leg)}
+
+  const marker=new THREE.Mesh(new THREE.BoxGeometry(1.4,.02,1.4),new THREE.MeshStandardMaterial({color:0x303640}));marker.position.y=.01;scene.add(marker);
+}
+
+function onResize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
+
+async function startGame(){
+  button.disabled=true;
+  status.textContent='Launching VR…';
+  try{
+    buildRoom();
+    renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+    renderer.setSize(innerWidth,innerHeight);
+    renderer.xr.enabled=true;
+    renderer.outputColorSpace=THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
+
+    // Keep the session request simple: required features are intentionally avoided
+    // so Quest Browser can enter the game before we add room/spatial features.
+    session=await navigator.xr.requestSession('immersive-vr');
+    await renderer.xr.setSession(session);
+
+    menu.style.display='none';
+    launched.style.display='block';
+    renderer.setAnimationLoop(()=>renderer.render(scene,camera));
+
+    session.addEventListener('end',()=>{
+      renderer.setAnimationLoop(null);
+      launched.style.display='none';
+      menu.style.display='grid';
+      button.disabled=false;
+      status.textContent='Game ended. Press START GAME to play again.';
+    });
+  }catch(e){
+    console.error('VR launch failed:',e);
+    status.textContent='VR launch failed: '+(e.name||e.message||'unknown error');
+    button.disabled=false;
+  }
+}
+
+button.addEventListener('click',startGame);
+window.addEventListener('resize',onResize);
+checkXR();
 </script>
-</body></html>
+</body>
+</html>
