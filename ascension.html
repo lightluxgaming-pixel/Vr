@@ -17,6 +17,31 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 const $=s=>document.querySelector(s);
 const menu=$('#menu'),enter=$('#enter'),status=$('#status'),hud=$('#hud'),headline=$('#headline'),timerUI=$('#timer'),sub=$('#sub'),bar=$('#bar'),rankUI=$('#rank');
 let renderer,scene,camera,session,rig,controllers=[],hudCanvas,hudTexture,hudMesh,raycaster=new THREE.Raycaster(),targets=[],clock=new THREE.Clock(),state='intro',trial=0,remaining=0,restRemaining=0,elapsed=0,score=0,finished=false,particles,particleSeed=[];
+const saveKey='ascension.profile.v1';
+function loadProfile(){try{return Object.assign({xp:0,level:0,sessions:0,totalHolds:0,streak:0,lastDay:'',history:[]},JSON.parse(localStorage.getItem(saveKey)||'{}'))}catch(e){return {xp:0,level:0,sessions:0,totalHolds:0,streak:0,lastDay:'',history:[]}}}
+let profile=loadProfile();
+const ranks=[['MORTAL',0],['INITIATE',100],['DISCIPLE',250],['ADEPT',450],['CHAMPION',700],['ASCENDANT',1000],['DEMI-GOD',1400],['DIVINE',1900],['CELESTIAL',2500],['GOD OF THE TEMPLE',3200]];
+const programs={
+ foundation:{label:'FOUNDATION',desc:'Short, gentle introduction · 3 trials',trials:[
+ {name:'THE SEALING OF THE GATE',exercise:'PALM PRESS',duration:10,instruction:'Stand comfortably. Press your palms gently together at chest height. Keep shoulders relaxed and breathe normally.',cue:'Hold a gentle, steady palm-to-palm press.'},
+ {name:'THE TITAN’S STANCE',exercise:'SHALLOW SPLIT STANCE',duration:12,instruction:'Stand with one foot slightly ahead. Bend both knees only a little, stay balanced, and hold. Switch lead leg halfway if comfortable.',cue:'Use a small, comfortable bend. Stay steady.'},
+ {name:'THE STILLNESS TRIAL',exercise:'WALL SIT (OPTIONAL)',duration:12,instruction:'With a clear wall behind you, slide only partway down into a comfortable wall sit. Keep knees comfortable and breathe. Or repeat the palm press seated.',cue:'A shallow hold is enough. Never push through pain.'}]},
+ champion:{label:'CHAMPION PATH',desc:'Balanced full-body practice · 5 trials',trials:[
+ {name:'THE GATEKEEPER',exercise:'PALM PRESS',duration:12,instruction:'Press your palms gently together at chest height. Keep your shoulders relaxed and breathe.',cue:'Steady pressure. Keep breathing.'},
+ {name:'THE ANCHOR',exercise:'TOWEL ROW (GENTLE)',duration:12,instruction:'Hold a towel in both hands at chest height. Pull outward gently without jerking, keeping elbows comfortably bent.',cue:'Pull outward gently against the towel.'},
+ {name:'THE TITAN’S STANCE',exercise:'SHALLOW SPLIT STANCE',duration:12,instruction:'Take a short split stance and make a small, comfortable knee bend. Stay balanced; switch legs if comfortable.',cue:'Small range. Stable and controlled.'},
+ {name:'THE SKY PILLAR',exercise:'CALF-RAISE HOLD',duration:10,instruction:'Stand near a stable support. Rise slightly onto the balls of your feet and hold only as high as comfortable.',cue:'Stay tall. Use a support if needed.'},
+ {name:'THE STILLNESS TRIAL',exercise:'SHALLOW WALL SIT OR PALM PRESS',duration:12,instruction:'Choose a shallow wall sit with a clear wall, or repeat a gentle palm press seated. Stop if uncomfortable.',cue:'Choose the comfortable option and breathe.'}]},
+ sanctuary:{label:'SANCTUARY',desc:'Low-intensity reset · 3 calm trials',trials:[
+ {name:'QUIET FLAME',exercise:'SEATED PALM PRESS',duration:8,instruction:'Sit comfortably and press your palms together lightly. Relax your jaw and shoulders.',cue:'Light pressure. Slow, natural breathing.'},
+ {name:'ROOTED EARTH',exercise:'SUPPORTED CALF HOLD',duration:8,instruction:'Stand beside a stable support. Rise just a little onto your toes, or remain seated and gently press your feet into the floor.',cue:'Keep it easy and controlled.'},
+ {name:'STILL WATER',exercise:'GENTLE GLUTE SET',duration:8,instruction:'Sit or lie comfortably and gently squeeze your glutes without holding your breath. Release if uncomfortable.',cue:'Gentle squeeze, then relax.'}]}
+};
+let selectedProgram='foundation',trials=programs.foundation.trials;
+function currentRank(){let n=0;for(let i=0;i<ranks.length;i++)if(profile.xp>=ranks[i][1])n=i;return n}
+function saveProfile(){try{localStorage.setItem(saveKey,JSON.stringify(profile))}catch(e){}}
+function dayStamp(){return new Date().toISOString().slice(0,10)}
+function awardSession(){const gained=150+trials.length*35;const old=currentRank();profile.xp+=gained;profile.sessions++;profile.totalHolds+=trials.length;const today=dayStamp();if(profile.lastDay!==today){const prev=new Date(Date.now()-86400000).toISOString().slice(0,10);profile.streak=profile.lastDay===prev?profile.streak+1:1;profile.lastDay=today}profile.history.unshift({date:today,program:selectedProgram,xp:gained,holds:trials.length});profile.history=profile.history.slice(0,20);saveProfile();const next=currentRank();return {gained,old,next}}
 const trials=[
  {name:'THE SEALING OF THE GATE',exercise:'PALM PRESS',duration:10,instruction:'Stand comfortably. Press your palms gently together at chest height. Keep shoulders relaxed and breathe normally.',cue:'Hold a gentle, steady palm-to-palm press.'},
  {name:'THE TITAN’S STANCE',exercise:'SHALLOW SPLIT STANCE',duration:12,instruction:'Stand with one foot slightly ahead. Bend both knees only a little, stay balanced, and hold. Switch lead leg halfway if comfortable.',cue:'Use a small, comfortable bend. Stay steady.'},
