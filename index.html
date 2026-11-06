@@ -66,9 +66,9 @@ function buildRoom1(){
     if(nearest.occupied){say('That socket is full. You cannot charge a battery twice by insisting.');return;}
     const target=nearest.base.getWorldPosition(new THREE.Vector3());obj.position.copy(target);obj.position.y+=.25;obj.userData.locked=true;obj.userData.velocity.set(0,0,0);nearest.occupied=true;inserted[i]=true;
     nearest.base.material.color.set(colors[i]);nearest.ring.material.emissiveIntensity=2.2;nearest.led.material.color.set(colors[i]);nearest.led.material.emissive.set(colors[i]);nearest.led.material.emissiveIntensity=2.8;
-    sound('socket');say(inserted.every(Boolean)?'All three cells are seated. The machine is alive. I would like it noted that I did not help.':'Correct socket. Magnetic lock engaged. Two cells remain.');
+    sound('socket');const complete=inserted.every(Boolean);const remaining=inserted.filter(v=>!v).length;
     objectiveUI.textContent='OBJECTIVE: Install the power cells ('+inserted.filter(Boolean).length+'/3).';
-    if(inserted.every(Boolean)){sound('solve');unlock(1);}
+    if(complete){sound('solve');unlock(1);setTimeout(()=>say('The machine is alive. I would like it noted that I did not help.'),700);}else say('Correct socket. Magnetic lock engaged. '+remaining+' cell'+(remaining===1?'':'s')+' remain.');
    }else{sound('reject');say(nearestDistance<1.8?'Almost. Center the cell over its glowing ring and let go.':'You have put a power cell on the floor. The floor is not the machine.');}
   });
   orb.userData.radius=.23;orb.userData.roomCenterZ=g.position.z;orb.userData.platform={x:0,z:g.position.z-2.8,halfX:1.4,halfZ:.6,top:.75};
