@@ -40,7 +40,7 @@ function removeBlock(m){const g=m.userData.grid,t=m.userData.type;if(g.y<=0&&t==
 function updateHUD(){$('#blocks').textContent=blocks.size+' blocks';$('#stats').textContent='❤ '+health+'/20 · Food '+food+'/20';$('#selected').textContent=(tool==='hand'?defs[selected]?.name:tool.toUpperCase())+' ×'+(inventory[selected]||0)}
 function noise(x,z){let n=Math.sin(x*127.1+z*311.7)*43758.5453;return n-Math.floor(n)}
 function heightAt(x,z){return Math.max(0,Math.min(3,Math.floor(1.15+Math.sin(x*.38)*.8+Math.cos(z*.31)*.7+(noise(x,z)-.5)*.8)))}
-function makeTree(x,z){const h=3+Math.floor(noise(x+22,z+7)*2);for(let y=1;y<=h;y++)addBlock(x,y,z,'wood');for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=h-1;dy<=h+2;dy++){if(Math.abs(dx)+Math.abs(dz)+(dy===h+2?2:0)<=4&&!(dx===0&&dz===0&&dy<=h))addBlock(x+dx,dy,z+dz,'leaves')}}
+function makeTree(x,z){const ground=heightAt(x,z),top=ground+3+Math.floor(noise(x+22,z+7)*2);for(let y=ground+1;y<=top;y++)addBlock(x,y,z,'wood');for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=top-1;dy<=top+2;dy++){if(Math.abs(dx)+Math.abs(dz)+(dy===top+2?2:0)<=4&&!(dx===0&&dz===0&&dy<=top))addBlock(x+dx,dy,z+dz,'leaves')}}
 function makeWorld(){worldGroup=new THREE.Group();scene.add(worldGroup);
  // Seeded, walk-around starter biome: layered hills, exposed stone, ore pockets, and a sandy shore.
  for(let x=-7;x<=7;x++)for(let z=-7;z<=7;z++){const r=Math.hypot(x,z);if(r>7)continue;const h=heightAt(x,z);for(let y=-1;y<=h;y++){let type=y===h?(r>5.5?'sand':'grass'):y===h-1?'dirt':'stone';if(y===-1&&noise(x*3+y,z*3)>.965)type=noise(x+y,z)>.5?'coal':'iron';addBlock(x,y,z,type)}}
