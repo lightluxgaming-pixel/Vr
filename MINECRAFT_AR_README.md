@@ -19,7 +19,9 @@ A browser-based mixed-reality voxel sandbox prototype for Meta Quest.
 - Room-sized starter island with grass, dirt, stone, an oak tree, and a seven-block hotbar.
 - BUILD mode places the selected block on a targeted block face or floor grid.
 - MINE mode breaks targeted blocks.
-- Hand pinch gestures select hotbar blocks and interact with the world.
+- Uses Meta Quest's hand-pinch Gamepad button as the primary select signal, with thumb/index joint-distance detection as a fallback.
+- Refreshes the floating hotbar transform before hand raycasts so UI targets are tested at their current position.
+- Shows live hand-tracking status in the HUD, including a warning when no hand input sources are present.
 
 ## Controls
 
