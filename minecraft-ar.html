@@ -1,137 +1,79 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#18251b">
-<title>MINECRAFT AR — Roomcraft</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#17251b"><title>Minecraft AR — Roomcraft</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101820;color:#f2f6ef;font-family:system-ui,Arial}canvas{display:block}
 #menu{position:fixed;inset:0;z-index:5;display:grid;place-items:center;padding:18px;background:radial-gradient(ellipse at 50% 35%,#36543d 0,#17251e 50%,#080e0b 100%);text-align:center}
-#card{width:min(720px,95vw);padding:clamp(20px,4vw,40px);border:1px solid #a6d69a66;border-radius:22px;background:#0d1713ed;box-shadow:0 20px 90px #000b}
-h1{font-size:clamp(42px,9vw,82px);line-height:.9;letter-spacing:.025em;margin:12px 0;color:#eaffdf;text-shadow:0 0 30px #7fcb7b88}
-.kicker{font-size:11px;letter-spacing:.28em;color:#b6e3a6;font-weight:900}p{line-height:1.55;color:#d4dfd1}
-button{border:1px solid #d9f3cb;border-radius:10px;padding:14px 24px;background:linear-gradient(135deg,#d8f2c8,#8fca78);color:#142015;font-weight:900;font-size:16px;cursor:pointer}
-button:disabled{opacity:.4}#status{font-size:12px;color:#c1d5bd;min-height:18px}
-#hud{position:fixed;z-index:3;top:10px;left:10px;right:10px;display:none;pointer-events:none;text-shadow:0 2px 8px #000;background:#101a13a8;border:1px solid #d4f0c633;border-radius:10px;padding:9px 12px;font-size:12px;line-height:1.5}
+#card{width:min(760px,95vw);max-height:94vh;overflow:auto;padding:clamp(18px,4vw,38px);border:1px solid #a6d69a66;border-radius:22px;background:#0d1713ed;box-shadow:0 20px 90px #000b}
+h1{font-size:clamp(40px,9vw,78px);line-height:.9;letter-spacing:.025em;margin:12px 0;color:#eaffdf;text-shadow:0 0 30px #7fcb7b88}.kicker{font-size:11px;letter-spacing:.25em;color:#b6e3a6;font-weight:900}p{line-height:1.5;color:#d4dfd1}
+button{border:1px solid #d9f3cb;border-radius:10px;padding:13px 22px;background:linear-gradient(135deg,#d8f2c8,#8fca78);color:#142015;font-weight:900;font-size:15px;cursor:pointer}button:disabled{opacity:.4}
+#status{font-size:12px;color:#c1d5bd;min-height:18px}#hud{position:fixed;z-index:3;top:10px;left:10px;right:10px;display:none;pointer-events:none;text-shadow:0 2px 8px #000;background:#101a13a8;border:1px solid #d4f0c633;border-radius:10px;padding:9px 12px;font-size:12px;line-height:1.5}
 #hud b{color:#d6ffb9}#toast{position:fixed;z-index:4;bottom:7%;left:8%;right:8%;text-align:center;font-weight:800;font-size:clamp(16px,2.5vw,25px);text-shadow:0 2px 9px #000;pointer-events:none}
 #crosshair{position:fixed;z-index:2;left:50%;top:50%;width:10px;height:10px;margin:-5px;border:2px solid #fff;border-radius:50%;display:none;pointer-events:none}
-</style>
-</head>
-<body>
-<div id="menu"><div id="card">
-<div class="kicker">A MIXED-REALITY VOXEL SANDBOX FOR META QUEST</div>
-<h1>MINECRAFT<br>AR</h1>
-<p>Your room becomes the world. Scan real surfaces with Space Setup, then mine, build, and explore with your bare hands.</p>
-<p><b>Hand controls</b><br>Point with your index finger · Pinch to interact<br>Choose BUILD to place blocks · Choose MINE to break blocks<br>Pinch a hotbar block to change what you're holding.</p>
-<p id="status">Checking Quest WebXR support…</p>
-<button id="enter">ENTER YOUR WORLD</button>
-<p style="font-size:11px;opacity:.65">Best on Meta Quest 3 / 3S in Meta Quest Browser. Requires room Space Setup and hand tracking.</p>
-</div></div>
-<div id="hud"><b>ROOMCRAFT</b> · <span id="mode">BUILD</span> · Selected: <span id="selected">GRASS</span><br><span id="room">Waiting for room scan…</span> · <span id="blocks">0 blocks</span><br>Point with index finger · Pinch to interact · <span id="help">Pinch the hotbar to choose a block</span></div>
+</style></head><body>
+<div id="menu"><div id="card"><div class="kicker">A ROOM-SCALE MIXED-REALITY SANDBOX</div><h1>MINECRAFT<br>AR</h1>
+<p>Your real room becomes the play space. Build a voxel world around you, mine resources, craft gear, explore terrain, and survive the night with tracked hands.</p>
+<p><b>Hands:</b> point with your index finger and pinch to select or mine. Use the floating hotbar to choose blocks, tools, and crafting. Walk around your world physically.</p>
+<p id="status">Checking WebXR…</p><button id="enter">ENTER YOUR WORLD</button>
+<p style="font-size:11px;opacity:.7">Quest Browser · Space Setup · Hand Tracking · Internet required for the 3D engine</p></div></div>
+<div id="hud"><b>ROOMCRAFT</b> · <span id="mode">BUILD</span> · <span id="selected">GRASS</span><br><span id="stats">❤ 20/20 · Food 20/20</span> · <span id="clock">DAY 1 · 08:00</span><br><span id="room">Waiting for room scan…</span> · <span id="blocks">0 blocks</span><br><span id="help">Point with index finger · pinch to interact</span></div>
 <div id="crosshair"></div><div id="toast"></div>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
-const $=s=>document.querySelector(s);
-const menu=$('#menu'),enter=$('#enter'),status=$('#status'),hud=$('#hud'),toast=$('#toast');
-let renderer,scene,camera,session,referenceSpace,floorY=0,worldOrigin=new THREE.Vector3(),worldGroup,hotbar,mode='build',selected='grass';
-let lastToast=0,roomCaptureAsked=false,trackedPlanes=new Map(),blocks=new Map(),handStates=new Map(),pinchTargets=[];
-const SIZE=.25,raycaster=new THREE.Raycaster(),clock=new THREE.Clock();
-const defs={
- grass:{name:'GRASS',top:0x70b957,side:0x579342},
- dirt:{name:'DIRT',color:0x93613d},
- stone:{name:'STONE',color:0x858b8c},
- wood:{name:'OAK',color:0x98663b},
- leaves:{name:'LEAVES',color:0x3d963e},
- sand:{name:'SAND',color:0xd8c17a},
- brick:{name:'BRICK',color:0xa84e42}
+const $=s=>document.querySelector(s),menu=$('#menu'),enter=$('#enter'),status=$('#status'),hud=$('#hud'),toast=$('#toast');
+const SIZE=.25,MAX_REACH=4,defs={
+ grass:{name:'GRASS',color:0x65a94d,hard:1},dirt:{name:'DIRT',color:0x93613d,hard:1},stone:{name:'STONE',color:0x858b8c,hard:3},
+ wood:{name:'OAK',color:0x98663b,hard:2},leaves:{name:'LEAVES',color:0x3d963e,hard:.5},sand:{name:'SAND',color:0xd8c17a,hard:1},
+ brick:{name:'BRICK',color:0xa84e42,hard:3},planks:{name:'PLANKS',color:0xb88750,hard:2},glass:{name:'GLASS',color:0x9bdde0,hard:.5},
+ coal:{name:'COAL ORE',color:0x34383a,hard:4},iron:{name:'IRON ORE',color:0xbaa58e,hard:4},water:{name:'WATER',color:0x347bc2,hard:99}
 };
-function say(t){toast.textContent=t;clearTimeout(say.timer);say.timer=setTimeout(()=>toast.textContent='',2400)}
-function materialFor(type){const d=defs[type];if(type==='grass')return [new THREE.MeshStandardMaterial({color:d.side,roughness:1}),new THREE.MeshStandardMaterial({color:d.side,roughness:1}),new THREE.MeshStandardMaterial({color:d.top,roughness:1}),new THREE.MeshStandardMaterial({color:d.side,roughness:1}),new THREE.MeshStandardMaterial({color:d.side,roughness:1}),new THREE.MeshStandardMaterial({color:d.side,roughness:1})];return new THREE.MeshStandardMaterial({color:d.color,roughness:1})}
-function key(x,y,z){return x+','+y+','+z}
-function blockAt(x,y,z){return blocks.get(key(x,y,z))}
-function addBlock(x,y,z,type,save=true){const k=key(x,y,z);if(blocks.has(k))return false;const mesh=new THREE.Mesh(new THREE.BoxGeometry(SIZE,SIZE,SIZE),materialFor(type));mesh.position.set(worldOrigin.x+x*SIZE, floorY+SIZE/2+y*SIZE, worldOrigin.z+z*SIZE);mesh.userData={kind:'block',grid:{x,y,z},type};worldGroup.add(mesh);blocks.set(k,mesh);if(save)updateCount();return true}
-function removeBlock(mesh){const g=mesh.userData.grid;if(g.y<0)return;blocks.delete(key(g.x,g.y,g.z));worldGroup.remove(mesh);mesh.geometry.dispose();if(Array.isArray(mesh.material))mesh.material.forEach(m=>m.dispose());else mesh.material.dispose();updateCount()}
-function updateCount(){$('#blocks').textContent=blocks.size+' blocks'}
+let renderer,scene,camera,session,referenceSpace,worldGroup,hotbar,playerOrigin=new THREE.Vector3(),floorY=0,roomCaptureAsked=false,sessionStart=0;
+let blocks=new Map(),planes=new Map(),pinchTargets=[],handStates=new Map(),handRays=new Map(),inventory={},selected='grass',mode='build',tool='hand',health=20,food=20,dayTime=8,day=1,elapsed=0,slimes=[],lastHit=0;
+const raycaster=new THREE.Raycaster(),clock=new THREE.Clock();
+function say(t){toast.textContent=t;clearTimeout(say.timer);say.timer=setTimeout(()=>toast.textContent='',2100)}
+function key(x,y,z){return x+','+y+','+z}function blockAt(x,y,z){return blocks.get(key(x,y,z))}
+function mat(type){const d=defs[type];return new THREE.MeshStandardMaterial({color:d.color,roughness:type==='glass'?.2:1,transparent:type==='glass'||type==='water',opacity:type==='water'?.58:type==='glass'?.38:1})}
+function addBlock(x,y,z,type,drop=false){const k=key(x,y,z);if(blocks.has(k)||!defs[type])return false;const m=new THREE.Mesh(new THREE.BoxGeometry(SIZE,SIZE,SIZE),mat(type));m.position.set(playerOrigin.x+x*SIZE,floorY+SIZE/2+y*SIZE,playerOrigin.z+z*SIZE);m.userData={kind:'block',grid:{x,y,z},type};worldGroup.add(m);blocks.set(k,m);if(drop===true)inventory[type]=(inventory[type]||0)+1;updateHUD();return true}
+function removeBlock(m){const g=m.userData.grid,t=m.userData.type;if(g.y<=0&&t==='bedrock'){say('Unbreakable');return}blocks.delete(key(g.x,g.y,g.z));worldGroup.remove(m);m.geometry.dispose();m.material.dispose();inventory[t]=(inventory[t]||0)+1;updateHUD();say('+1 '+defs[t].name)}
+function updateHUD(){$('#blocks').textContent=blocks.size+' blocks';$('#stats').textContent='❤ '+health+'/20 · Food '+food+'/20';$('#selected').textContent=(tool==='hand'?defs[selected]?.name:tool.toUpperCase())}
+function noise(x,z){let n=Math.sin(x*127.1+z*311.7)*43758.5453;return n-Math.floor(n)}
+function heightAt(x,z){return Math.max(0,Math.min(3,Math.floor(1.15+Math.sin(x*.38)*.8+Math.cos(z*.31)*.7+(noise(x,z)-.5)*.8)))}
+function makeTree(x,z){const h=3+Math.floor(noise(x+22,z+7)*2);for(let y=1;y<=h;y++)addBlock(x,y,z,'wood');for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=h-1;dy<=h+2;dy++){if(Math.abs(dx)+Math.abs(dz)+(dy===h+2?2:0)<=4&&!(dx===0&&dz===0&&dy<=h))addBlock(x+dx,dy,z+dz,'leaves')}}
 function makeWorld(){worldGroup=new THREE.Group();scene.add(worldGroup);
- // A compact starter island is deliberately room-sized: each block is 25 cm wide.
- for(let x=-4;x<=4;x++)for(let z=-4;z<=4;z++){addBlock(x,0,z,'grass',false);if(Math.abs(x)<3&&Math.abs(z)<3)addBlock(x,-1,z,'dirt',false);if(Math.abs(x)<2&&Math.abs(z)<2)addBlock(x,-2,z,'stone',false)}
- // A small oak tree gives the player something recognizable to harvest.
- for(let y=1;y<=3;y++)addBlock(2,y,-1,'wood',false);
- for(let x=1;x<=3;x++)for(let z=-2;z<=0;z++)for(let y=3;y<=4;y++)if(!(x===2&&z===-1&&y===3))addBlock(x,y,z,'leaves',false);
- updateCount();
+ // Seeded, walk-around starter biome: layered hills, exposed stone, ore pockets, and a sandy shore.
+ for(let x=-13;x<=13;x++)for(let z=-13;z<=13;z++){const r=Math.hypot(x,z);if(r>13)continue;const h=heightAt(x,z);for(let y=-2;y<=h;y++){let type=y===h?(r>10?'sand':'grass'):y>=h-2?'dirt':'stone';if(y<h-2&&noise(x*3+y,z*3)>.965)type=noise(x+y,z)>.5?'coal':'iron';addBlock(x,y,z,type)}}
+ for(const [x,z] of [[-6,-5],[4,-7],[8,3],[-8,6],[1,8]])makeTree(x,z);
+ for(let x=-2;x<=2;x++)for(let z=9;z<=11;z++)addBlock(x,0,z,'water');
+ for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++){inventory.grass=(inventory.grass||0)+1;inventory.dirt=(inventory.dirt||0)+1}
+ updateHUD();
 }
-function makeLabel(text){const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');x.clearRect(0,0,256,64);x.fillStyle='#fff';x.font='bold 30px system-ui';x.textAlign='center';x.textBaseline='middle';x.fillText(text,128,32);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return new THREE.Mesh(new THREE.PlaneGeometry(.48,.12),new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false,side:THREE.DoubleSide}))}
-function makeHotbar(){hotbar=new THREE.Group();scene.add(hotbar);const types=Object.keys(defs);types.forEach((type,i)=>{const slot=new THREE.Group();slot.position.set((i-3)*.18,0,0);hotbar.add(slot);const base=new THREE.Mesh(new THREE.BoxGeometry(.15,.15,.025),new THREE.MeshBasicMaterial({color:0x18221b,transparent:true,opacity:.9}));slot.add(base);const cube=new THREE.Mesh(new THREE.BoxGeometry(.09,.09,.09),materialFor(type));cube.position.z=.035;cube.userData={kind:'slot',type};slot.add(cube);const label=makeLabel(defs[type].name);label.position.set(0,-.105,.025);label.scale.set(.7,.7,1);slot.add(label);pinchTargets.push(cube);});const panel=new THREE.Mesh(new THREE.BoxGeometry(1.48,.27,.035),new THREE.MeshBasicMaterial({color:0x142017,transparent:true,opacity:.72}));panel.position.z=-.035;hotbar.add(panel);hotbar.userData.isHotbar=true;
- const buttons=[];for(const [i,m] of ['build','mine'].entries()){const g=new THREE.Group();g.position.set((i===0?-.48:.48),.22,0);hotbar.add(g);const b=new THREE.Mesh(new THREE.BoxGeometry(.38,.14,.025),new THREE.MeshBasicMaterial({color:m==='build'?0x65b75d:0xb75b4d}));b.userData={kind:'mode',mode:m};g.add(b);const l=makeLabel(m.toUpperCase());l.position.z=.02;l.scale.set(.72,.7,1);g.add(l);pinchTargets.push(b);buttons.push(b)}}
-function updateHotbarPose(){if(!camera||!hotbar)return;const p=new THREE.Vector3(0,-.28,-.85).applyMatrix4(camera.matrixWorld);hotbar.position.copy(p);hotbar.quaternion.copy(camera.quaternion)}
-function getAimRay(frame,source){const pose=frame.getPose(source.targetRaySpace,referenceSpace);if(!pose)return null;const m=new THREE.Matrix4().fromArray(pose.transform.matrix),origin=new THREE.Vector3().setFromMatrixPosition(m),q=new THREE.Quaternion().setFromRotationMatrix(m),dir=new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize();return new THREE.Ray(origin,dir)}
-function jointPosition(frame,hand,name){try{const j=hand.get(name);if(!j)return null;const p=frame.getJointPose(j,referenceSpace);return p?new THREE.Vector3(p.transform.position.x,p.transform.position.y,p.transform.position.z):null}catch(e){return null}}
-function doPinch(frame,source,ray){
- const hand=source.hand;if(!hand)return false;
- // Meta Quest exposes the natural hand pinch as the first Gamepad button.
- // Prefer this platform gesture signal; joint-distance is a fallback for runtimes
- // that expose joints but do not populate the hand Gamepad.
- const buttons=source.gamepad?.buttons||[];
- const gamepadPinch=buttons.some(button=>button&&((button.pressed===true)||(Number(button.value)>0.78)));
- const thumb=jointPosition(frame,hand,'thumb-tip'),index=jointPosition(frame,hand,'index-finger-tip');
- const jointPinch=!!(thumb&&index&&thumb.distanceTo(index)<.042);
- const pinching=buttons.length?gamepadPinch:jointPinch;
- const id=source.handedness||'unknown';
- const was=handStates.get(id)||false;
- if(pinching&&!was&&ray){scene.updateMatrixWorld(true);interact(ray)}
- handStates.set(id,pinching);
- return true;
+function label(text){const c=document.createElement('canvas');c.width=256;c.height=64;const g=c.getContext('2d');g.clearRect(0,0,256,64);g.fillStyle='#fff';g.font='bold 29px system-ui';g.textAlign='center';g.textBaseline='middle';g.fillText(text,128,32);const tex=new THREE.CanvasTexture(c);return new THREE.Mesh(new THREE.PlaneGeometry(.45,.11),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,side:THREE.DoubleSide}))}
+function uiBox(group,w,h,color,data,text){const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,.025),new THREE.MeshBasicMaterial({color}));b.userData=data;group.add(b);if(text){const l=label(text);l.position.z=.022;l.scale.set(.85,.8,1);group.add(l)}pinchTargets.push(b);return b}
+function makeHotbar(){hotbar=new THREE.Group();scene.add(hotbar);const types=['grass','dirt','stone','wood','leaves','sand','brick','planks','glass','coal','iron'];types.forEach((type,i)=>{const slot=new THREE.Group();slot.position.set((i-5)*.14,0,0);hotbar.add(slot);const frame=new THREE.Mesh(new THREE.BoxGeometry(.125,.14,.025),new THREE.MeshBasicMaterial({color:0x18221b,transparent:true,opacity:.9}));slot.add(frame);const cube=new THREE.Mesh(new THREE.BoxGeometry(.075,.075,.075),mat(type));cube.position.z=.035;cube.userData={kind:'slot',type};slot.add(cube);pinchTargets.push(cube);});const bg=new THREE.Mesh(new THREE.BoxGeometry(1.65,.22,.04),new THREE.MeshBasicMaterial({color:0x142017,transparent:true,opacity:.72}));bg.position.z=-.035;hotbar.add(bg);
+ uiBox(hotbar,.28,.12,0x4d9b56,{kind:'mode',mode:'build'},'BUILD').position.set(-.66,.2,0);
+ uiBox(hotbar,.28,.12,0xb75b4d,{kind:'mode',mode:'mine'},'MINE').position.set(-.33,.2,0);
+ uiBox(hotbar,.28,.12,0x497d9b,{kind:'tool',tool:'hand'},'HAND').position.set(0,.2,0);
+ uiBox(hotbar,.28,.12,0x9a7941,{kind:'craft'},'CRAFT').position.set(.33,.2,0);
+ uiBox(hotbar,.28,.12,0x6c6e9b,{kind:'tool',tool:'pickaxe'},'PICK').position.set(.66,.2,0);
 }
-function interact(ray){raycaster.set(ray.origin,ray.direction);raycaster.far=4;
- const uiHits=raycaster.intersectObjects(pinchTargets,false);if(uiHits.length){const data=uiHits[0].object.userData;if(data.kind==='slot'){selected=data.type;$('#selected').textContent=defs[selected].name;say(defs[selected].name+' selected')}else if(data.kind==='mode'){mode=data.mode;$('#mode').textContent=mode.toUpperCase();say(mode.toUpperCase()+' mode')}return}
- const blockMeshes=Array.from(blocks.values());const hits=raycaster.intersectObjects(blockMeshes,false);
- if(mode==='mine'){if(hits.length){removeBlock(hits[0].object);say('Block mined')}return}
- if(hits.length){const hit=hits[0],normal=hit.face.normal.clone().transformDirection(hit.object.matrixWorld);const p=hit.object.position.clone().addScaledVector(normal,SIZE*.98);const x=Math.round((p.x-worldOrigin.x)/SIZE),y=Math.round((p.y-floorY-SIZE/2)/SIZE),z=Math.round((p.z-worldOrigin.z)/SIZE);if(y<0||y>9||Math.abs(x)>10||Math.abs(z)>10){say('Out of build range');return}if(addBlock(x,y,z,selected))say(defs[selected].name+' placed');return}
- // Build on a detected horizontal surface/floor, snapped to the island grid.
- if(Math.abs(ray.direction.y)>.001){const t=(floorY-ray.origin.y)/ray.direction.y;if(t>0&&t<4){const p=ray.origin.clone().addScaledVector(ray.direction,t);const x=Math.round((p.x-worldOrigin.x)/SIZE),z=Math.round((p.z-worldOrigin.z)/SIZE);if(Math.abs(x)<=10&&Math.abs(z)<=10){let y=0;while(blockAt(x,y,z)&&y<9)y++;if(addBlock(x,y,z,selected))say(defs[selected].name+' placed')}}}
-}
-function syncRoomPlanes(frame){const found=frame.detectedPlanes;if(!found)return;let count=0;for(const plane of found){count++;let entry=trackedPlanes.get(plane);if(!entry){const geom=new THREE.BufferGeometry();const pts=plane.polygon||[];const verts=[];for(const p of pts)verts.push(p.x,p.y,p.z);if(verts.length>=9){const arr=[];for(let i=0;i<verts.length;i+=3)arr.push(verts[i],verts[i+1],verts[i+2]);arr.push(verts[0],verts[1],verts[2]);geom.setAttribute('position',new THREE.Float32BufferAttribute(arr,3));const line=new THREE.Line(geom,new THREE.LineBasicMaterial({color:0x79e8c2,transparent:true,opacity:.55}));line.frustumCulled=false;scene.add(line);entry={line,plane};trackedPlanes.set(plane,entry)}}const pose=frame.getPose(plane.planeSpace,referenceSpace);if(pose&&entry){entry.line.matrixAutoUpdate=false;entry.line.matrix.fromArray(pose.transform.matrix);entry.line.matrixWorldNeedsUpdate=true;/* local-floor is already floor-aligned; keep the voxel grid fixed while room planes update. */}}
- $('#room').textContent=count+' room surfaces detected · floor '+floorY.toFixed(2)+'m';
- if(count===0&&!roomCaptureAsked&&session&&typeof session.initiateRoomCapture==='function'&&performance.now()-sessionStart>2800){roomCaptureAsked=true;try{session.initiateRoomCapture()}catch(e){console.warn('Room capture could not start',e)}}
-}
-let sessionStart=0;
-function setupScene(){scene=new THREE.Scene();scene.background=null;scene.add(new THREE.HemisphereLight(0xffffff,0x64765d,1.8));const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.position.set(-3,7,4);scene.add(sun);
- renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;renderer.xr.setReferenceSpaceType('local-floor');renderer.setClearColor(0x000000,0);document.body.appendChild(renderer.domElement);camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.01,40);scene.add(camera);
- window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()});
-}
-async function start(){if(!navigator.xr){status.textContent='WebXR is unavailable. Open this page in Meta Quest Browser over HTTPS.';return}
- enter.disabled=true;status.textContent='Requesting passthrough, hand tracking, and Space Setup…';
- try{
-  const supported=await navigator.xr.isSessionSupported('immersive-ar');if(!supported)throw new Error('This browser does not support immersive AR.');
-  setupScene();
-  session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local-floor','hand-tracking','plane-detection'],optionalFeatures:['anchors','hit-test']});
-  await renderer.xr.setSession(session);referenceSpace=renderer.xr.getReferenceSpace();sessionStart=performance.now();menu.style.display='none';hud.style.display='block';$('#crosshair').style.display='block';
-  session.addEventListener('end',()=>{hud.style.display='none';menu.style.display='grid';enter.disabled=false;status.textContent='Session ended. Enter again to return to your world.';if(renderer)renderer.setAnimationLoop(null)});
-  // Spawn the island 1.4 m in front of the player, aligned to the floor reference space.
-  const viewer=await session.requestReferenceSpace('viewer');const frame=await new Promise(resolve=>{const f=t=>resolve(t);session.requestAnimationFrame((t,f)=>resolve(f))});const pose=frame.getViewerPose(referenceSpace);let head=pose?.transform.position;
-  const forward=new THREE.Vector3(0,0,-1);if(pose){const q=new THREE.Quaternion(pose.transform.orientation.x,pose.transform.orientation.y,pose.transform.orientation.z,pose.transform.orientation.w);forward.applyQuaternion(q)}
-  worldOrigin.set((head?.x||0)+forward.x*1.35,0,(head?.z||0)+forward.z*1.35);
-  makeWorld();makeHotbar();
-  renderer.setAnimationLoop((time,frame)=>{
-   camera.updateMatrixWorld();
-   updateHotbarPose();
-   if(hotbar)hotbar.updateMatrixWorld(true);
-   if(frame){
-    syncRoomPlanes(frame);
-    let tracked=0;
-    for(const source of session.inputSources){
-     if(source.hand){tracked++;const ray=getAimRay(frame,source);doPinch(frame,source,ray)}
-    }
-    const handsLabel=tracked===0?'No hands tracked — enable Hand Tracking in Quest settings':tracked+' hand(s) tracked';
-    $('#help').textContent=handsLabel+' · pinch to select';
-   }
-   renderer.render(scene,camera);
-  });
-  say('Welcome! Pinch BUILD or MINE, then use your index finger to aim.');
- }catch(e){console.error(e);status.textContent=e.message||'Could not start AR. Check hand tracking and Space Setup permissions.';enter.disabled=false;if(session)try{await session.end()}catch(_){}}
-}
-enter.addEventListener('click',start);
-if(navigator.xr)navigator.xr.isSessionSupported('immersive-ar').then(v=>{status.textContent=v?'Ready for Quest AR. Allow hand tracking and room access when prompted.':'Immersive AR is not supported here. Use Meta Quest Browser.'}).catch(()=>{status.textContent='Open this page in Meta Quest Browser over HTTPS.'});
-</script>
-</body></html>
+function updateHotbar(){if(!camera||!hotbar)return;const p=new THREE.Vector3(0,-.34,-.82).applyMatrix4(camera.matrixWorld);hotbar.position.copy(p);hotbar.quaternion.copy(camera.quaternion);hotbar.updateMatrixWorld(true)}
+function poseJoint(frame,hand,name){try{const j=hand.get(name);return j?frame.getJointPose(j,referenceSpace):null}catch(e){return null}}
+function handRay(frame,source){const h=source.hand;if(!h)return null;const tip=poseJoint(frame,h,'index-finger-tip'),base=poseJoint(frame,h,'index-finger-phalanx-distal');if(tip&&base){const a=new THREE.Vector3(tip.transform.position.x,tip.transform.position.y,tip.transform.position.z),b=new THREE.Vector3(base.transform.position.x,base.transform.position.y,base.transform.position.z),d=a.clone().sub(b).normalize();if(d.lengthSq()>.5)return new THREE.Ray(a,d)}
+ // Runtime fallback: Meta's emulated hand target ray.
+ const p=frame.getPose(source.targetRaySpace,referenceSpace);if(!p)return null;const m=new THREE.Matrix4().fromArray(p.transform.matrix),o=new THREE.Vector3().setFromMatrixPosition(m),q=new THREE.Quaternion().setFromRotationMatrix(m);return new THREE.Ray(o,new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize())}
+function pinching(frame,source){const bs=source.gamepad?.buttons||[];if(bs.length)return bs.some(b=>b&&(b.pressed||Number(b.value)>.78));const t=poseJoint(frame,source.hand,'thumb-tip'),i=poseJoint(frame,source.hand,'index-finger-tip');return !!(t&&i&&new THREE.Vector3(t.transform.position.x,t.transform.position.y,t.transform.position.z).distanceTo(new THREE.Vector3(i.transform.position.x,i.transform.position.y,i.transform.position.z))<.04)}
+function interact(ray){raycaster.set(ray.origin,ray.direction);raycaster.far=MAX_REACH;scene.updateMatrixWorld(true);const ui=raycaster.intersectObjects(pinchTargets,false);if(ui.length){const d=ui[0].object.userData;if(d.kind==='slot'){selected=d.type;tool='hand';say(defs[selected].name+' selected')}else if(d.kind==='mode'){mode=d.mode;say(mode.toUpperCase()+' mode')}else if(d.kind==='tool'){tool=d.tool;say(tool.toUpperCase()+' equipped')}else if(d.kind==='craft'){craftMenu()}updateHUD();return}
+ const hits=raycaster.intersectObjects(Array.from(blocks.values()),false);if(!hits.length)return;const hit=hits[0],obj=hit.object,g=obj.userData.grid,t=obj.userData.type;
+ if(mode==='mine'){const now=performance.now();if(now-lastHit<Math.max(180,(defs[t]?.hard||1)*170-(tool==='pickaxe'?260:0)))return;lastHit=now;if(t==='water')return;if(tool==='hand'&&defs[t].hard>=3){say('Too hard! Craft a pickaxe');return}removeBlock(obj);return}
+ const n=hit.face.normal.clone().transformDirection(obj.matrixWorld),p=obj.position.clone().addScaledVector(n,SIZE*.98),x=Math.round((p.x-playerOrigin.x)/SIZE),y=Math.round((p.y-floorY-SIZE/2)/SIZE),z=Math.round((p.z-playerOrigin.z)/SIZE);if(Math.abs(x)>16||Math.abs(z)>16||y<0||y>12){say('Build limit');return}if(addBlock(x,y,z,selected))say('Placed '+defs[selected].name)}
+function craftMenu(){const recipes=[{name:'Wooden planks ×4',need:{wood:1},give:{planks:4}},{name:'Brick blocks ×4',need:{stone:4},give:{brick:4}},{name:'Glass ×2',need:{sand:2},give:{glass:2}},{name:'Stone pickaxe',need:{stone:3,wood:2},give:{pickaxe:1}},{name:'Oak logs ×2',need:{planks:4},give:{wood:2}}];const r=recipes.find(q=>Object.entries(q.need).every(([k,v])=>(inventory[k]||0)>=v));if(!r){say('No recipe ready — gather more resources');return}for(const [k,v] of Object.entries(r.need))inventory[k]-=v;for(const [k,v] of Object.entries(r.give))inventory[k]=(inventory[k]||0)+v;if(r.give.pickaxe){tool='pickaxe';say('Stone pickaxe crafted!')}else say('Crafted '+r.name);updateHUD()}
+function syncPlanes(frame){const found=frame.detectedPlanes;if(!found)return;let count=0;for(const p of found){count++;let e=planes.get(p);if(!e){const verts=[];for(const v of p.polygon||[])verts.push(v.x,v.y,v.z);if(verts.length>=9){const arr=[];for(let i=0;i<verts.length;i+=3)arr.push(verts[i],verts[i+1],verts[i+2]);arr.push(verts[0],verts[1],verts[2]);const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(arr,3));const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x7ce5bd,transparent:true,opacity:.5}));line.frustumCulled=false;scene.add(line);e={line};planes.set(p,e)}}const pose=frame.getPose(p.planeSpace,referenceSpace);if(pose&&e){e.line.matrixAutoUpdate=false;e.line.matrix.fromArray(pose.transform.matrix);e.line.matrixWorldNeedsUpdate=true}}
+ $('#room').textContent=count+' room surfaces detected';if(count===0&&!roomCaptureAsked&&session&&typeof session.initiateRoomCapture==='function'&&performance.now()-sessionStart>3000){roomCaptureAsked=true;try{session.initiateRoomCapture()}catch(e){console.warn(e)}}}
+function spawnSlime(){const group=new THREE.Group(),body=new THREE.Mesh(new THREE.BoxGeometry(.32,.25,.32),new THREE.MeshStandardMaterial({color:0x69c64d,roughness:.65}));body.position.y=.13;group.add(body);for(const x of [-.08,.08]){const eye=new THREE.Mesh(new THREE.BoxGeometry(.035,.045,.02),new THREE.MeshBasicMaterial({color:0x152015}));eye.position.set(x,.18,-.164);group.add(eye)}const x=Math.floor(Math.random()*13)-6,z=Math.floor(Math.random()*13)-6;group.position.set(playerOrigin.x+x*SIZE,floorY+heightAt(x,z)*SIZE+SIZE,playerOrigin.z+z*SIZE);group.userData={life:3,dir:Math.random()*6.28};worldGroup.add(group);slimes.push(group)}
+function tickWorld(dt){elapsed+=dt;dayTime=(dayTime+dt*.16)%24;if(dayTime<.16&&elapsed>2){day++;elapsed=0}const night=dayTime>19||dayTime<6;const h=Math.floor(dayTime),m=Math.floor((dayTime-h)*60);$('#clock').textContent='DAY '+day+' · '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');scene.children.forEach(o=>{if(o.isHemisphereLight)o.intensity=night?.45:1.5;if(o.isDirectionalLight)o.intensity=night?.25:2});if(night&&slimes.length<3&&Math.random()<dt*.035)spawnSlime();for(const s of slimes){s.userData.dir+= (Math.random()-.5)*dt*.4;s.position.x+=Math.cos(s.userData.dir)*dt*.08;s.position.z+=Math.sin(s.userData.dir)*dt*.08;s.position.y=floorY+SIZE*2+Math.sin(elapsed*4+s.position.x)*.025;if(s.position.distanceTo(camera.position)<.65&&Math.random()<dt*.12){health=Math.max(0,health-1);updateHUD();say('A slime hit you!')}}if(Math.floor(elapsed)%35===0&&Math.random()<dt*.04){food=Math.max(0,food-1);if(food===0)health=Math.max(0,health-1);updateHUD()}if(health<=0){health=20;food=12;say('You respawned at your room base');}}
+function setup(){scene=new THREE.Scene();scene.add(new THREE.HemisphereLight(0xffffff,0x64765d,1.5));const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(-3,7,4);scene.add(sun);renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.4));renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;renderer.xr.setReferenceSpaceType('local-floor');renderer.setClearColor(0x000000,0);document.body.appendChild(renderer.domElement);camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.01,50);scene.add(camera);window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()})}
+async function start(){if(!navigator.xr){status.textContent='WebXR unavailable. Open this HTTPS page in Meta Quest Browser.';return}enter.disabled=true;status.textContent='Requesting passthrough, room scan, and hand tracking…';try{if(!await navigator.xr.isSessionSupported('immersive-ar'))throw Error('Immersive AR is not supported in this browser.');setup();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local-floor','hand-tracking','plane-detection'],optionalFeatures:['anchors','hit-test']});await renderer.xr.setSession(session);referenceSpace=renderer.xr.getReferenceSpace();sessionStart=performance.now();menu.style.display='none';hud.style.display='block';$('#crosshair').style.display='block';const viewer=await session.requestReferenceSpace('viewer');const frame=await new Promise(resolve=>session.requestAnimationFrame((t,f)=>resolve(f)));const pose=frame.getViewerPose(referenceSpace),head=pose?.transform.position;let forward=new THREE.Vector3(0,0,-1);if(pose){const q=new THREE.Quaternion(pose.transform.orientation.x,pose.transform.orientation.y,pose.transform.orientation.z,pose.transform.orientation.w);forward.applyQuaternion(q)}playerOrigin.set((head?.x||0)+forward.x*1.3,0,(head?.z||0)+forward.z*1.3);makeWorld();makeHotbar();session.addEventListener('end',()=>{hud.style.display='none';menu.style.display='grid';enter.disabled=false;status.textContent='Session ended. Enter again to return.';renderer.setAnimationLoop(null)});renderer.setAnimationLoop((t,f)=>{camera.updateMatrixWorld();updateHotbar();if(f){syncPlanes(f);let count=0;for(const source of session.inputSources){if(source.hand){count++;const ray=handRay(f,source),pinch=pinching(f,source),id=source.handedness||'hand',was=handStates.get(id)||false;if(ray){handRays.set(id,ray);if(pinch&&!was)interact(ray)}handStates.set(id,pinch)}}$('#help').textContent=count?count+' hand(s) tracked · index point + pinch':'No hands tracked — enable Hand Tracking in Quest settings'}tickWorld(Math.min(clock.getDelta(),.05))}renderer.render(scene,camera)});say('Welcome! Build, mine, craft, and survive.')}catch(e){console.error(e);status.textContent=e.message||'Could not start. Check Space Setup and hand tracking.';enter.disabled=false;if(session)try{await session.end()}catch(_){}}}
+enter.addEventListener('click',start);if(navigator.xr)navigator.xr.isSessionSupported('immersive-ar').then(v=>status.textContent=v?'Ready. Allow passthrough, room access, and hand tracking.':'Immersive AR unavailable here — use Quest Browser.').catch(()=>status.textContent='Open in Meta Quest Browser over HTTPS.');
+</script></body></html>
