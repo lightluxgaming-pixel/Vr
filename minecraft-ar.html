@@ -67,7 +67,22 @@ function makeHotbar(){hotbar=new THREE.Group();scene.add(hotbar);const types=Obj
 function updateHotbarPose(){if(!camera||!hotbar)return;const p=new THREE.Vector3(0,-.28,-.85).applyMatrix4(camera.matrixWorld);hotbar.position.copy(p);hotbar.quaternion.copy(camera.quaternion)}
 function getAimRay(frame,source){const pose=frame.getPose(source.targetRaySpace,referenceSpace);if(!pose)return null;const m=new THREE.Matrix4().fromArray(pose.transform.matrix),origin=new THREE.Vector3().setFromMatrixPosition(m),q=new THREE.Quaternion().setFromRotationMatrix(m),dir=new THREE.Vector3(0,0,-1).applyQuaternion(q).normalize();return new THREE.Ray(origin,dir)}
 function jointPosition(frame,hand,name){try{const j=hand.get(name);if(!j)return null;const p=frame.getJointPose(j,referenceSpace);return p?new THREE.Vector3(p.transform.position.x,p.transform.position.y,p.transform.position.z):null}catch(e){return null}}
-function doPinch(frame,source,ray){const hand=source.hand;if(!hand)return;const a=jointPosition(frame,hand,'thumb-tip'),b=jointPosition(frame,hand,'index-finger-tip');if(!a||!b)return;const pinching=a.distanceTo(b)<.028;const id=source.handedness||String(hand);const was=handStates.get(id)||false;if(pinching&&!was&&ray)interact(ray);handStates.set(id,pinching)}
+function doPinch(frame,source,ray){
+ const hand=source.hand;if(!hand)return false;
+ // Meta Quest exposes the natural hand pinch as the first Gamepad button.
+ // Prefer this platform gesture signal; joint-distance is a fallback for runtimes
+ // that expose joints but do not populate the hand Gamepad.
+ const buttons=source.gamepad?.buttons||[];
+ const gamepadPinch=buttons.some(button=>button&&((button.pressed===true)||(Number(button.value)>0.78)));
+ const thumb=jointPosition(frame,hand,'thumb-tip'),index=jointPosition(frame,hand,'index-finger-tip');
+ const jointPinch=!!(thumb&&index&&thumb.distanceTo(index)<.042);
+ const pinching=buttons.length?gamepadPinch:jointPinch;
+ const id=source.handedness||'unknown';
+ const was=handStates.get(id)||false;
+ if(pinching&&!was&&ray){scene.updateMatrixWorld(true);interact(ray)}
+ handStates.set(id,pinching);
+ return true;
+}
 function interact(ray){raycaster.set(ray.origin,ray.direction);raycaster.far=4;
  const uiHits=raycaster.intersectObjects(pinchTargets,false);if(uiHits.length){const data=uiHits[0].object.userData;if(data.kind==='slot'){selected=data.type;$('#selected').textContent=defs[selected].name;say(defs[selected].name+' selected')}else if(data.kind==='mode'){mode=data.mode;$('#mode').textContent=mode.toUpperCase();say(mode.toUpperCase()+' mode')}return}
  const blockMeshes=Array.from(blocks.values());const hits=raycaster.intersectObjects(blockMeshes,false);
@@ -98,7 +113,21 @@ async function start(){if(!navigator.xr){status.textContent='WebXR is unavailabl
   const forward=new THREE.Vector3(0,0,-1);if(pose){const q=new THREE.Quaternion(pose.transform.orientation.x,pose.transform.orientation.y,pose.transform.orientation.z,pose.transform.orientation.w);forward.applyQuaternion(q)}
   worldOrigin.set((head?.x||0)+forward.x*1.35,0,(head?.z||0)+forward.z*1.35);
   makeWorld();makeHotbar();
-  renderer.setAnimationLoop((time,frame)=>{if(frame){syncRoomPlanes(frame);for(const source of session.inputSources){if(source.hand){const ray=getAimRay(frame,source);if(ray)doPinch(frame,source,ray)}}}camera.updateMatrixWorld();updateHotbarPose();renderer.render(scene,camera)});
+  renderer.setAnimationLoop((time,frame)=>{
+   camera.updateMatrixWorld();
+   updateHotbarPose();
+   if(hotbar)hotbar.updateMatrixWorld(true);
+   if(frame){
+    syncRoomPlanes(frame);
+    let tracked=0;
+    for(const source of session.inputSources){
+     if(source.hand){tracked++;const ray=getAimRay(frame,source);doPinch(frame,source,ray)}
+    }
+    const handsLabel=tracked===0?'No hands tracked — enable Hand Tracking in Quest settings':tracked+' hand(s) tracked';
+    $('#help').textContent=handsLabel+' · pinch to select';
+   }
+   renderer.render(scene,camera);
+  });
   say('Welcome! Pinch BUILD or MINE, then use your index finger to aim.');
  }catch(e){console.error(e);status.textContent=e.message||'Could not start AR. Check hand tracking and Space Setup permissions.';enter.disabled=false;if(session)try{await session.end()}catch(_){}}
 }
