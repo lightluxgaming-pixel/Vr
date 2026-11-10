@@ -1,39 +1,42 @@
 # Minecraft AR — Roomcraft
 
-A browser-based mixed-reality voxel sandbox prototype for Meta Quest.
+A room-scale mixed-reality voxel survival sandbox prototype for Meta Quest Browser.
 
-## Run it
+## Run it on Quest
 
 1. Publish the `minecraft-ar-prototype` branch from **Settings → Pages** (root folder).
 2. Open `https://lightluxgaming-pixel.github.io/Vr/minecraft-ar.html` in Meta Quest Browser.
 3. Allow immersive AR, hand tracking, and room/plane access.
-4. Complete Space Setup if the headset asks. If no room planes arrive, the page asks the headset to start room capture when supported.
-5. Point with an index finger and pinch to interact.
+4. Complete Space Setup if prompted. If no room planes arrive, the page asks the headset to start room capture when supported.
+5. Point with your index finger and pinch to interact. Walk around the small island physically.
 
-## Current prototype
+## Current playable systems
 
-- Transparent immersive-AR passthrough session.
-- Requests WebXR hand tracking and plane detection.
-- Reads detected room planes and draws their outlines.
-- Requests Meta room capture through `XRSession.initiateRoomCapture()` when no planes are detected.
-- Room-sized starter island with grass, dirt, stone, an oak tree, and a seven-block hotbar.
-- BUILD mode places the selected block on a targeted block face or floor grid.
-- MINE mode breaks targeted blocks.
-- Uses Meta Quest's hand-pinch Gamepad button as the primary select signal, with thumb/index joint-distance detection as a fallback.
-- Refreshes the floating hotbar transform before hand raycasts so UI targets are tested at their current position.
-- Shows live hand-tracking status in the HUD, including a warning when no hand input sources are present.
+- Transparent immersive-AR passthrough with WebXR `immersive-ar`.
+- Requests `local-floor`, `hand-tracking`, and `plane-detection`; room plane outlines appear when supplied by Quest.
+- Quest hand aiming uses the tracked index fingertip and distal finger joint to form a direct pointing ray, with the runtime target ray as fallback.
+- Pinch selection uses Meta's regular hand-pinch Gamepad button, with joint-distance fallback when the runtime does not expose that button.
+- Procedurally shaped starter biome with grass, dirt, stone, sand, coal/iron ore pockets, trees, leaves, and a small water feature.
+- BUILD mode places selected blocks and consumes that block from the starter inventory.
+- MINE mode mines blocks and adds the mined resource to inventory. Stone and ore need a crafted pickaxe.
+- Floating hotbar supports block selection, BUILD/MINE, HAND/PICK tool selection, and CRAFT.
+- Basic recipes: planks, bricks, glass, stone pickaxe, and logs.
+- Survival loop: health, food, day/night cycle, respawning, and hostile slimes that appear at night.
+- HUD reports room surfaces, tracked hands, block count, health/food, selected item count, and in-game time.
 
 ## Controls
 
-- Point with your index finger.
-- Pinch thumb and index finger to interact.
-- Pinch a hotbar cube to select its block type.
-- Pinch BUILD or MINE to switch modes.
-- In BUILD mode, pinch a block face to place an adjacent block.
-- In MINE mode, pinch a block to break it.
+- Point with your index finger; pinch thumb and index finger to activate.
+- Select a block in the floating hotbar.
+- BUILD: pinch a block face to place an adjacent block (consumes inventory).
+- MINE: pinch a block to mine it (hard blocks require a pickaxe).
+- CRAFT: crafts the first recipe for which you have enough materials.
+- Walk around the island in your real room; keep a clear physical play area.
 
 ## Important limitations
 
-This is the first playable foundation, not a complete Minecraft replacement yet. It currently has a starter island and basic voxel editing; survival, crafting, mobs, world saving, multiplayer, full terrain generation, and robust collision/occlusion are not implemented yet. Room-plane detection and hand tracking must be tested on the target headset/browser. The page uses Three.js from jsDelivr and requires an internet connection.
+This is a much larger playable prototype, not yet a complete Minecraft replacement. It does not yet include full infinite chunk streaming, caves, a complete recipe/inventory screen, reliable persistent world saving, multiplayer, farming, animals, sound/music, full player collision, or robust real-world occlusion. Slime combat and survival balancing are still prototype-level. The world is intentionally kept compact for Quest browser performance.
 
-The project lives on its own branch, `minecraft-ar-prototype`. The existing `main` branch and other prototype branch are not modified by this work.
+Hand tracking, room capture, and frame rate must be tested on the actual headset/browser. The assistant can syntax-check the source but cannot physically validate Quest tracking from here. The page loads Three.js from jsDelivr and requires internet access.
+
+The work is isolated on `minecraft-ar-prototype`; `main` and the existing other prototype branch are untouched.
