@@ -74,6 +74,60 @@ function syncPlanes(frame){const found=frame.detectedPlanes;if(!found)return;let
 function spawnSlime(){const group=new THREE.Group(),body=new THREE.Mesh(new THREE.BoxGeometry(.32,.25,.32),new THREE.MeshStandardMaterial({color:0x69c64d,roughness:.65}));body.position.y=.13;group.add(body);for(const x of [-.08,.08]){const eye=new THREE.Mesh(new THREE.BoxGeometry(.035,.045,.02),new THREE.MeshBasicMaterial({color:0x152015}));eye.position.set(x,.18,-.164);group.add(eye)}const x=Math.floor(Math.random()*13)-6,z=Math.floor(Math.random()*13)-6;group.position.set(playerOrigin.x+x*SIZE,floorY+heightAt(x,z)*SIZE+SIZE,playerOrigin.z+z*SIZE);group.userData={life:3,dir:Math.random()*6.28};worldGroup.add(group);slimes.push(group)}
 function tickWorld(dt){elapsed+=dt;dayTime=(dayTime+dt*.16)%24;if(dayTime<.16&&elapsed>2){day++;elapsed=0}const night=dayTime>19||dayTime<6;const h=Math.floor(dayTime),m=Math.floor((dayTime-h)*60);$('#clock').textContent='DAY '+day+' · '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');scene.children.forEach(o=>{if(o.isHemisphereLight)o.intensity=night?.45:1.5;if(o.isDirectionalLight)o.intensity=night?.25:2});if(night&&slimes.length<3&&Math.random()<dt*.035)spawnSlime();for(const s of slimes){s.userData.dir+= (Math.random()-.5)*dt*.4;s.position.x+=Math.cos(s.userData.dir)*dt*.08;s.position.z+=Math.sin(s.userData.dir)*dt*.08;s.position.y=floorY+SIZE*2+Math.sin(elapsed*4+s.position.x)*.025;if(s.position.distanceTo(camera.position)<.65&&Math.random()<dt*.12){health=Math.max(0,health-1);updateHUD();say('A slime hit you!')}}if(Math.floor(elapsed)%35===0&&Math.random()<dt*.04){food=Math.max(0,food-1);if(food===0)health=Math.max(0,health-1);updateHUD()}if(health<=0){health=20;food=12;say('You respawned at your room base');}}
 function setup(){scene=new THREE.Scene();scene.add(new THREE.HemisphereLight(0xffffff,0x64765d,1.5));const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(-3,7,4);scene.add(sun);renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.4));renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;renderer.xr.setReferenceSpaceType('local-floor');renderer.setClearColor(0x000000,0);document.body.appendChild(renderer.domElement);camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.01,50);scene.add(camera);window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()})}
-async function start(){if(!navigator.xr){status.textContent='WebXR unavailable. Open this HTTPS page in Meta Quest Browser.';return}enter.disabled=true;status.textContent='Requesting passthrough, room scan, and hand tracking…';try{if(!await navigator.xr.isSessionSupported('immersive-ar'))throw Error('Immersive AR is not supported in this browser.');setup();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local-floor','hand-tracking','plane-detection'],optionalFeatures:['anchors','hit-test']});await renderer.xr.setSession(session);referenceSpace=renderer.xr.getReferenceSpace();sessionStart=performance.now();menu.style.display='none';hud.style.display='block';$('#crosshair').style.display='block';const viewer=await session.requestReferenceSpace('viewer');const frame=await new Promise(resolve=>session.requestAnimationFrame((t,f)=>resolve(f)));const pose=frame.getViewerPose(referenceSpace),head=pose?.transform.position;let forward=new THREE.Vector3(0,0,-1);if(pose){const q=new THREE.Quaternion(pose.transform.orientation.x,pose.transform.orientation.y,pose.transform.orientation.z,pose.transform.orientation.w);forward.applyQuaternion(q)}playerOrigin.set((head?.x||0)+forward.x*1.3,0,(head?.z||0)+forward.z*1.3);makeWorld();makeHotbar();session.addEventListener('end',()=>{hud.style.display='none';menu.style.display='grid';enter.disabled=false;status.textContent='Session ended. Enter again to return.';renderer.setAnimationLoop(null)});renderer.setAnimationLoop((t,f)=>{camera.updateMatrixWorld();updateHotbar();if(f){syncPlanes(f);let count=0;for(const source of session.inputSources){if(source.hand){count++;const ray=handRay(f,source),pinch=pinching(f,source),id=source.handedness||'hand',was=handStates.get(id)||false;if(ray){handRays.set(id,ray);if(pinch&&!was)interact(ray)}handStates.set(id,pinch)}}$('#help').textContent=count?count+' hand(s) tracked · index point + pinch':'No hands tracked — enable Hand Tracking in Quest settings'};tickWorld(Math.min(clock.getDelta(),.05))}renderer.render(scene,camera)});say('Welcome! Build, mine, craft, and survive.')}catch(e){console.error(e);status.textContent=e.message||'Could not start. Check Space Setup and hand tracking.';enter.disabled=false;if(session)try{await session.end()}catch(_){}}}
+async function start(){
+ if(!navigator.xr){status.textContent='WebXR unavailable. Open this HTTPS page in Meta Quest Browser.';return;}
+ enter.disabled=true;
+ status.textContent='Requesting passthrough, room scan, and hand tracking…';
+ try{
+  const supported=await navigator.xr.isSessionSupported('immersive-ar');
+  if(!supported)throw new Error('Immersive AR is not supported in this browser.');
+  setup();
+  session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local-floor','hand-tracking','plane-detection'],optionalFeatures:['anchors','hit-test']});
+  await renderer.xr.setSession(session);
+  referenceSpace=renderer.xr.getReferenceSpace();
+  sessionStart=performance.now();
+  menu.style.display='none';hud.style.display='block';$('#crosshair').style.display='block';
+  const frame=await new Promise(resolve=>session.requestAnimationFrame((time,xrFrame)=>resolve(xrFrame)));
+  const pose=frame.getViewerPose(referenceSpace);
+  const head=pose?pose.transform.position:null;
+  const forward=new THREE.Vector3(0,0,-1);
+  if(pose){
+   const q=new THREE.Quaternion(pose.transform.orientation.x,pose.transform.orientation.y,pose.transform.orientation.z,pose.transform.orientation.w);
+   forward.applyQuaternion(q);
+  }
+  playerOrigin.set((head?head.x:0)+forward.x*1.3,0,(head?head.z:0)+forward.z*1.3);
+  makeWorld();makeHotbar();
+  session.addEventListener('end',()=>{
+   hud.style.display='none';menu.style.display='grid';enter.disabled=false;
+   status.textContent='Session ended. Enter again to return.';
+   renderer.setAnimationLoop(null);
+  });
+  renderer.setAnimationLoop((time,xrFrame)=>{
+   camera.updateMatrixWorld();updateHotbar();
+   if(xrFrame){
+    syncPlanes(xrFrame);
+    let count=0;
+    for(const source of session.inputSources){
+     if(!source.hand)continue;
+     count++;
+     const ray=handRay(xrFrame,source);
+     const pinch=pinching(xrFrame,source);
+     const id=source.handedness||'hand';
+     const was=handStates.get(id)||false;
+     if(ray){handRays.set(id,ray);if(pinch&&!was)interact(ray);}
+     handStates.set(id,pinch);
+    }
+    $('#help').textContent=count?count+' hand(s) tracked · index point + pinch':'No hands tracked — enable Hand Tracking in Quest settings';
+    tickWorld(Math.min(clock.getDelta(),.05));
+   }
+   renderer.render(scene,camera);
+  });
+  say('Welcome! Build, mine, craft, and survive.');
+ }catch(e){
+  console.error(e);status.textContent=e.message||'Could not start. Check Space Setup and hand tracking.';
+  enter.disabled=false;
+  if(session){try{await session.end();}catch(_){}}
+ }
+}
 enter.addEventListener('click',start);if(navigator.xr)navigator.xr.isSessionSupported('immersive-ar').then(v=>status.textContent=v?'Ready. Allow passthrough, room access, and hand tracking.':'Immersive AR unavailable here — use Quest Browser.').catch(()=>status.textContent='Open in Meta Quest Browser over HTTPS.');
 </script></body></html>
