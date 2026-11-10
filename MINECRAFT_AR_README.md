@@ -22,6 +22,7 @@ A room-scale mixed-reality voxel survival sandbox prototype for Meta Quest Brows
 - Floating hotbar supports block selection, BUILD/MINE, HAND/PICK tool selection, and CRAFT.
 - Basic recipes: planks, bricks, glass, stone pickaxe, and logs.
 - Survival loop: health, food, day/night cycle, respawning, and hostile slimes that appear at night.
+- Local world persistence: block edits, inventory, health/food, and day/time are saved in browser storage and restored on the next visit.
 - HUD reports room surfaces, tracked hands, block count, health/food, selected item count, and in-game time.
 
 ## Controls
@@ -35,7 +36,7 @@ A room-scale mixed-reality voxel survival sandbox prototype for Meta Quest Brows
 
 ## Important limitations
 
-This is a much larger playable prototype, not yet a complete Minecraft replacement. It does not yet include full infinite chunk streaming, caves, a complete recipe/inventory screen, reliable persistent world saving, multiplayer, farming, animals, sound/music, full player collision, or robust real-world occlusion. Slime combat and survival balancing are still prototype-level. The world is intentionally kept compact for Quest browser performance.
+This is a much larger playable prototype, not yet a complete Minecraft replacement. It does not yet include full infinite chunk streaming, caves, a complete recipe/inventory screen, persistent spatial anchors that restore the exact room placement, multiplayer, farming, animals, sound/music, full player collision, or robust real-world occlusion. Slime combat and survival balancing are still prototype-level. The world is intentionally kept compact for Quest browser performance.
 
 Hand tracking, room capture, and frame rate must be tested on the actual headset/browser. The assistant can syntax-check the source but cannot physically validate Quest tracking from here. The page loads Three.js from jsDelivr and requires internet access.
 
